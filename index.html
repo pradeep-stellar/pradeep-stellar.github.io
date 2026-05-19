@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Pradeep Gowda @ Stellar AI</title>
+        <style>
+            /* ── Tokens ── */
+            :root {
+                --bg: #f7f4ef;
+                --surface: #fdfcf9;
+                --ink: #2b2622;
+                --muted: #7a7166;
+                --accent: #7c5c3e;
+                --rule: #e2dcd4;
+                --hover-bg: #f0ebe3;
+                --font-body: "Georgia", "Times New Roman", serif;
+                --font-mono: "Courier New", Courier, monospace;
+            }
+
+            /* ── Reset ── */
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            /* ── Page ── */
+            body {
+                background: var(--bg);
+                color: var(--ink);
+                font-family: var(--font-body);
+                font-size: 1.0625rem;
+                line-height: 1.7;
+                min-height: 100vh;
+                padding: 3rem 1.25rem 6rem;
+            }
+
+            /* ── Container ── */
+            .wrapper {
+                max-width: 640px;
+                margin: 0 auto;
+            }
+
+            /* ── Header ── */
+            header {
+                margin-bottom: 3.5rem;
+                border-bottom: 1px solid var(--rule);
+                padding-bottom: 1.75rem;
+            }
+
+            header h1 {
+                font-size: 1.6rem;
+                font-weight: normal;
+                letter-spacing: 0.01em;
+                color: var(--accent);
+            }
+
+            header p {
+                margin-top: 0.35rem;
+                font-size: 0.9375rem;
+                color: var(--muted);
+                font-style: italic;
+            }
+
+            /* ── Section label ── */
+            .section-label {
+                font-family: var(--font-mono);
+                font-size: 0.72rem;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                color: var(--muted);
+                margin-bottom: 1.25rem;
+            }
+
+            /* ── Entry list ── */
+            .entries {
+                list-style: none;
+                display: flex;
+                flex-direction: column;
+                gap: 0; /* entries share a single rule — see below */
+            }
+
+            /* ───────────────────────────────────────────────
+       ENTRY TEMPLATE — copy one <li> block to add a
+       new entry. Fill in href, title, description,
+       and date (format: "Mon, YYYY").
+    ─────────────────────────────────────────────── */
+            .entry {
+                border-top: 1px solid var(--rule);
+            }
+
+            .entry:last-child {
+                border-bottom: 1px solid var(--rule);
+            }
+
+            .entry a {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                gap: 1.5rem;
+                padding: 1.1rem 0.6rem;
+                text-decoration: none;
+                color: inherit;
+                border-radius: 4px;
+                transition: background 0.15s ease;
+            }
+
+            .entry a:hover {
+                background: var(--hover-bg);
+            }
+
+            .entry-body {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .entry-title {
+                display: block;
+                font-size: 1.05rem;
+                color: var(--ink);
+                margin-bottom: 0.2rem;
+            }
+
+            .entry a:hover .entry-title {
+                color: var(--accent);
+            }
+
+            .entry-desc {
+                display: block;
+                font-size: 0.875rem;
+                color: var(--muted);
+                font-style: italic;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .entry-date {
+                flex-shrink: 0;
+                font-family: var(--font-mono);
+                font-size: 0.78rem;
+                color: var(--muted);
+                white-space: nowrap;
+            }
+
+            /* ── Footer ── */
+            footer {
+                margin-top: 4rem;
+                font-size: 0.8125rem;
+                color: var(--muted);
+                font-family: var(--font-mono);
+            }
+
+            /* ── Responsive ── */
+            @media (max-width: 480px) {
+                .entry a {
+                    flex-direction: column;
+                    gap: 0.3rem;
+                }
+                .entry-desc {
+                    white-space: normal;
+                }
+                .entry-date {
+                    align-self: flex-end;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="wrapper">
+            <header>
+                <h1>Pradeep Gowda @ Stellar AI</h1>
+                <p>notes, experiments &amp; writing</p>
+            </header>
+
+            <p class="section-label">Pages</p>
+
+            <ul class="entries">
+                <!-- ═══════════════════════════════════════
+           HOW TO ADD A NEW ENTRY
+           1. Copy one <li class="entry"> block
+           2. Update href, title, description, date
+           ════════════════════════════════════ -->
+
+                <!-- ENTRY -->
+                <li class="entry">
+                    <a href="/hello">
+                        <span class="entry-body">
+                            <span class="entry-title">Hello, World</span>
+                            <span class="entry-desc"
+                                >The first post — why this site exists and where
+                                it's going.</span
+                            >
+                        </span>
+                        <span class="entry-date">May, 2026</span>
+                    </a>
+                </li>
+                <!-- ENDENTRY -->
+            </ul>
+
+            <footer>
+                <p>
+                    pradeep-stellar.github.io &middot; &copy; 2026 Pradeep
+                    Gowda.
+                </p>
+            </footer>
+        </div>
+    </body>
+</html>
