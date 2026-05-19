@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Entra ID → Cloudflare Access Setup</title>
+        <style>
+            :root {
+                --bg:        #f7f4ef;
+                --surface:   #fdfcf9;
+                --ink:       #2b2622;
+                --muted:     #7a7166;
+                --accent:    #7c5c3e;
+                --rule:      #e2dcd4;
+                --note-bg:   #f0ebe3;
+                --warn-bg:   #fef3e2;
+                --warn-border:#d4901a;
+                --ok-bg:     #eaf3ec;
+                --ok-border: #4a8f5a;
+                --font-body: "Georgia", "Times New Roman", serif;
+                --font-mono: "Courier New", Courier, monospace;
+            }
+
+            *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+            body {
+                background: var(--bg);
+                color: var(--ink);
+                font-family: var(--font-body);
+                font-size: 1.0625rem;
+                line-height: 1.75;
+                min-height: 100vh;
+                padding: 3rem 1.25rem 6rem;
+            }
+
+            .wrapper {
+                max-width: 700px;
+                margin: 0 auto;
+            }
+
+            /* ── Header ── */
+            header {
+                margin-bottom: 2.5rem;
+                border-bottom: 1px solid var(--rule);
+                padding-bottom: 1.5rem;
+            }
+            .breadcrumb {
+                font-family: var(--font-mono);
+                font-size: 0.78rem;
+                color: var(--muted);
+                margin-bottom: 0.75rem;
+            }
+            .breadcrumb a { color: var(--accent); text-decoration: none; }
+            .breadcrumb a:hover { text-decoration: underline; }
+            header h1 {
+                font-size: 1.55rem;
+                font-weight: normal;
+                letter-spacing: 0.01em;
+                color: var(--accent);
+            }
+            .meta {
+                margin-top: 0.3rem;
+                font-family: var(--font-mono);
+                font-size: 0.78rem;
+                color: var(--muted);
+            }
+
+            /* ── Prose ── */
+            .prose p { margin-bottom: 1rem; }
+            .prose p:last-child { margin-bottom: 0; }
+
+            /* ── Section ── */
+            section { margin-top: 2.75rem; }
+            section h2 {
+                font-size: 1.05rem;
+                font-weight: normal;
+                font-family: var(--font-mono);
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--muted);
+                border-bottom: 1px solid var(--rule);
+                padding-bottom: 0.4rem;
+                margin-bottom: 1.5rem;
+            }
+
+            /* ── Steps ── */
+            ol.steps {
+                list-style: none;
+                counter-reset: step;
+                display: flex;
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+            ol.steps > li {
+                counter-increment: step;
+                display: flex;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+            ol.steps > li::before {
+                content: counter(step);
+                flex-shrink: 0;
+                width: 1.75rem;
+                height: 1.75rem;
+                border-radius: 50%;
+                background: var(--accent);
+                color: #fff;
+                font-family: var(--font-mono);
+                font-size: 0.78rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-top: 0.15rem;
+            }
+            .step-body { flex: 1; min-width: 0; }
+            .step-body strong { color: var(--ink); }
+            .step-body p { margin-bottom: 0.5rem; }
+            .step-body p:last-child { margin-bottom: 0; }
+
+            /* ── Code / copy blocks ── */
+            code {
+                font-family: var(--font-mono);
+                font-size: 0.85em;
+                background: var(--note-bg);
+                padding: 0.1em 0.35em;
+                border-radius: 3px;
+                border: 1px solid var(--rule);
+            }
+            .copy-block {
+                margin: 0.6rem 0;
+                background: var(--surface);
+                border: 1px solid var(--rule);
+                border-left: 3px solid var(--accent);
+                border-radius: 4px;
+                padding: 0.7rem 0.9rem;
+                font-family: var(--font-mono);
+                font-size: 0.85rem;
+                color: var(--accent);
+                word-break: break-all;
+            }
+            .copy-label {
+                font-family: var(--font-mono);
+                font-size: 0.7rem;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--muted);
+                margin-bottom: 0.2rem;
+            }
+
+            /* ── Callouts ── */
+            .callout {
+                border-radius: 4px;
+                padding: 0.75rem 1rem;
+                margin: 0.75rem 0;
+                font-size: 0.9375rem;
+            }
+            .callout-warn {
+                background: var(--warn-bg);
+                border-left: 3px solid var(--warn-border);
+            }
+            .callout-ok {
+                background: var(--ok-bg);
+                border-left: 3px solid var(--ok-border);
+            }
+            .callout-note {
+                background: var(--note-bg);
+                border-left: 3px solid var(--rule);
+            }
+            .callout strong {
+                font-style: normal;
+                display: block;
+                margin-bottom: 0.15rem;
+                font-size: 0.8rem;
+                font-family: var(--font-mono);
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+
+            /* ── Prerequisites ── */
+            ul.prereqs {
+                list-style: none;
+                display: flex;
+                flex-direction: column;
+                gap: 0.35rem;
+            }
+            ul.prereqs li::before {
+                content: "✓ ";
+                color: var(--accent);
+                font-weight: bold;
+            }
+
+            /* ── Part header (numbered parts) ── */
+            .part-header {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+                margin-bottom: 1.25rem;
+            }
+            .part-badge {
+                flex-shrink: 0;
+                font-family: var(--font-mono);
+                font-size: 0.7rem;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                background: var(--accent);
+                color: #fff;
+                padding: 0.2rem 0.55rem;
+                border-radius: 2px;
+            }
+            .part-title {
+                font-size: 1rem;
+                font-style: italic;
+                color: var(--muted);
+            }
+
+            /* ── Footer ── */
+            footer {
+                margin-top: 4rem;
+                font-size: 0.8125rem;
+                color: var(--muted);
+                font-family: var(--font-mono);
+                border-top: 1px solid var(--rule);
+                padding-top: 1.25rem;
+            }
+
+            @media (max-width: 480px) {
+                ol.steps > li { gap: 0.75rem; }
+                .copy-block { font-size: 0.78rem; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="wrapper">
+
+            <header>
+                <div class="breadcrumb">
+                    <a href="/">pradeep-stellar.github.io</a> / entra-cloudflare
+                </div>
+                <h1>Connecting Entra ID to Cloudflare Access</h1>
+                <div class="meta">Admin runbook &middot; May, 2026</div>
+            </header>
+
+            <!-- ── Rationale ── -->
+            <section>
+                <h2>Why</h2>
+                <div class="prose">
+                    <p>
+                        Cloudflare Access sits in front of our internal applications and
+                        decides who gets in. By wiring it to Microsoft Entra ID (formerly
+                        Azure AD) as the identity provider, every login goes through the
+                        same corporate credentials, MFA policies, and conditional-access
+                        rules you already manage in Entra&nbsp;— no separate passwords or
+                        user lists to maintain in Cloudflare.
+                    </p>
+                    <p>
+                        The result: a user visits a protected app, Cloudflare redirects
+                        them to the familiar Microsoft sign-in screen, Entra authenticates
+                        and returns a token, and Cloudflare enforces access policies
+                        (email domain, group membership, etc.) on top of that.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ── Prerequisites ── -->
+            <section>
+                <h2>Before you start</h2>
+                <ul class="prereqs">
+                    <li>Global Administrator or Application Administrator role in Entra ID</li>
+                    <li>Access to the Cloudflare Zero Trust dashboard (<code>one.dash.cloudflare.com</code>)</li>
+                    <li>Your Cloudflare <strong>team domain</strong> — found in Zero Trust → Settings → Custom Pages (looks like <code>stellarai.cloudflareaccess.com</code>)</li>
+                </ul>
+            </section>
+
+            <!-- ══════════════════════════════════════
+                 PART 1 — ENTRA ID
+            ════════════════════════════════════════ -->
+            <section>
+                <h2>Part 1 &mdash; Register the app in Entra ID</h2>
+                <div class="part-header">
+                    <span class="part-badge">Entra</span>
+                    <span class="part-title">portal.azure.com</span>
+                </div>
+
+                <ol class="steps">
+
+                    <li>
+                        <div class="step-body">
+                            <p>Sign in to <strong>portal.azure.com</strong> with your admin account. In the top search bar type <code>Microsoft Entra ID</code> and open it.</p>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>In the left sidebar choose <strong>App registrations</strong>, then click <strong>+ New registration</strong>.</p>
+                            <ul style="padding-left:1.25rem; margin-top:0.4rem; font-size:0.9375rem;">
+                                <li><strong>Name:</strong> <code>Cloudflare Zero Trust</code> (or your preferred label)</li>
+                                <li><strong>Supported account types:</strong> Accounts in this organizational directory only (single tenant)</li>
+                                <li><strong>Redirect URI:</strong> Web &rarr; paste the URL below</li>
+                            </ul>
+                            <div class="copy-label">Redirect URI</div>
+                            <div class="copy-block">https://stellarai.cloudflareaccess.com/cdn-cgi/access/callback</div>
+                            <p>Click <strong>Register</strong>.</p>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>On the <strong>Overview</strong> page that appears, copy and save both values — you will need them in Part 2:</p>
+                            <div class="copy-label">Application (client) ID</div>
+                            <div class="copy-block">xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</div>
+                            <div class="copy-label">Directory (tenant) ID</div>
+                            <div class="copy-block">xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</div>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>In the left sidebar choose <strong>Certificates &amp; secrets</strong> → <strong>+ New client secret</strong>.</p>
+                            <ul style="padding-left:1.25rem; margin-top:0.4rem; font-size:0.9375rem;">
+                                <li><strong>Description:</strong> <code>Cloudflare Access</code></li>
+                                <li><strong>Expires:</strong> choose your org's standard rotation period</li>
+                            </ul>
+                            <p>Click <strong>Add</strong>.</p>
+                            <div class="callout callout-warn">
+                                <strong>Copy now</strong>
+                                The secret <em>Value</em> is shown only once. Copy it immediately and store it in your secrets manager before navigating away.
+                            </div>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>Go to <strong>API permissions</strong> → <strong>+ Add a permission</strong> → <strong>Microsoft Graph</strong> → <strong>Delegated permissions</strong>.</p>
+                            <p>Search for and add each of these:</p>
+                            <ul style="padding-left:1.25rem; margin-top:0.4rem; font-size:0.9375rem;">
+                                <li><code>email</code></li>
+                                <li><code>openid</code></li>
+                                <li><code>profile</code></li>
+                                <li><code>User.Read</code></li>
+                            </ul>
+                            <div class="callout callout-note">
+                                <strong>Optional — group-based policies</strong>
+                                If you want to use Entra security groups inside Cloudflare Access policies, also add <code>Directory.Read.All</code> (Application permission). This requires admin consent and allows Cloudflare to read group membership.
+                            </div>
+                            <p>Click <strong>Grant admin consent for [your org]</strong> → <strong>Yes</strong>.</p>
+                        </div>
+                    </li>
+
+                </ol>
+            </section>
+
+            <!-- ══════════════════════════════════════
+                 PART 2 — CLOUDFLARE ZERO TRUST
+            ════════════════════════════════════════ -->
+            <section>
+                <h2>Part 2 &mdash; Add Entra ID as a login method in Cloudflare</h2>
+                <div class="part-header">
+                    <span class="part-badge">Cloudflare</span>
+                    <span class="part-title">one.dash.cloudflare.com</span>
+                </div>
+
+                <ol class="steps">
+
+                    <li>
+                        <div class="step-body">
+                            <p>Open <strong>one.dash.cloudflare.com</strong>, select your account, and navigate to <strong>Settings → Authentication → Login methods</strong>.</p>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>Click <strong>+ Add new</strong> and choose <strong>Azure AD</strong> (Cloudflare's label for Entra ID).</p>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>Fill in the form using the values you saved in Part 1:</p>
+                            <ul style="padding-left:1.25rem; margin-top:0.4rem; font-size:0.9375rem;">
+                                <li><strong>Name:</strong> <code>Entra ID</code> (displayed to users on the login screen)</li>
+                                <li><strong>App ID:</strong> Application (client) ID from step 3</li>
+                                <li><strong>Client secret:</strong> secret Value from step 4</li>
+                                <li><strong>Directory ID:</strong> Directory (tenant) ID from step 3</li>
+                            </ul>
+                            <p>If you granted <code>Directory.Read.All</code> in step 5, toggle <strong>Support groups</strong> on.</p>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>Click <strong>Test</strong>. A new browser tab opens with a Microsoft login prompt. Sign in with a regular employee account.</p>
+                            <div class="callout callout-ok">
+                                <strong>Success looks like</strong>
+                                "Your connection is working" — Cloudflare shows the authenticated user's email. Close the test tab and return.
+                            </div>
+                            <div class="callout callout-warn">
+                                <strong>If the test fails</strong>
+                                Double-check the redirect URI in Entra exactly matches your team domain, and confirm admin consent was granted in step 5.
+                            </div>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>Click <strong>Save</strong>.</p>
+                        </div>
+                    </li>
+
+                </ol>
+            </section>
+
+            <!-- ══════════════════════════════════════
+                 PART 3 — APPLY TO APPLICATIONS
+            ════════════════════════════════════════ -->
+            <section>
+                <h2>Part 3 &mdash; Apply to Access applications</h2>
+
+                <div class="prose">
+                    <p>
+                        The identity provider is now available but not yet enforced. For
+                        each application you want to protect:
+                    </p>
+                </div>
+
+                <ol class="steps" style="margin-top:1.25rem;">
+
+                    <li>
+                        <div class="step-body">
+                            <p>Go to <strong>Access → Applications</strong>, open an existing app (or create a new one).</p>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>On the app's <strong>Authentication</strong> tab, under <em>Identity providers</em>, select <strong>Entra ID</strong> (the name you set in Part 2, step 3) and deselect any providers you no longer want.</p>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>In the app's <strong>Policies</strong> tab, you can now write rules using Entra attributes, for example:</p>
+                            <ul style="padding-left:1.25rem; margin-top:0.4rem; font-size:0.9375rem;">
+                                <li>Emails ending with <code>@getstellar.ai</code></li>
+                                <li>Members of a specific Entra security group (requires groups toggle from Part 2)</li>
+                            </ul>
+                        </div>
+                    </li>
+
+                    <li>
+                        <div class="step-body">
+                            <p>Click <strong>Save application</strong> and test access with an end-user account.</p>
+                        </div>
+                    </li>
+
+                </ol>
+            </section>
+
+            <!-- ── Maintenance notes ── -->
+            <section>
+                <h2>Ongoing maintenance</h2>
+                <ul style="padding-left:1.25rem; font-size:0.9375rem; display:flex; flex-direction:column; gap:0.5rem;">
+                    <li><strong>Secret rotation:</strong> When the client secret expires, create a new one in Entra (step 4), update the value in Cloudflare (Part 2, step 3), then delete the old secret in Entra.</li>
+                    <li><strong>New employees:</strong> No action needed — they inherit access via Entra group membership and existing policies.</li>
+                    <li><strong>Offboarding:</strong> Disabling or deleting the user in Entra revokes Cloudflare Access on next token refresh (typically within minutes).</li>
+                </ul>
+            </section>
+
+            <footer>
+                <p>pradeep-stellar.github.io &middot; internal admin runbook</p>
+            </footer>
+
+        </div>
+    </body>
+</html>
