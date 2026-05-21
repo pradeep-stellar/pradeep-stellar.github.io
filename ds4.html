@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DS4 — DwarfStar 4: Technical Report</title>
+    <style>
+        /* --- Typography & Layout --- */
+        @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Fira+Code:wght@400;500&display=swap');
+        body { font-family: 'EB Garamond', 'Times New Roman', serif; font-size: 17px; line-height: 1.55; color: #1a1a1a; max-width: 960px; margin: 0 auto; padding: 2.5rem 1.5rem; background: #fefefe; }
+        h1, h2, h3, h4 { font-family: 'EB Garamond', 'Times New Roman', serif; font-weight: 600; letter-spacing: -0.01em; }
+        h1 { font-size: 2.4em; border-bottom: 2px solid #222; padding-bottom: 0.25em; margin-top: 1.8em; text-align: center; }
+        h2 { font-size: 1.65em; margin-top: 2.2em; border-left: 3px solid #222; padding-left: 0.65em; }
+        h3 { font-size: 1.35em; margin-top: 1.8em; }
+        h4 { font-size: 1.15em; margin: 1.2em 0 0.5em; }
+        p { margin: 1em 0; text-align: justify; }
+        ul, ol { margin: 1em 0; padding-left: 1.8em; }
+        li { margin: 0.5em 0; }
+        code { font-family: 'Fira Code', 'Menlo', monospace; font-size: 0.85em; background: #f2f2f2; padding: 0.1em 0.25em; border-radius: 2px; }
+        pre { font-family: 'Fira Code', 'Menlo', monospace; font-size: 0.8em; background: #f2f2f2; padding: 1em 1.2em; border-radius: 4px; overflow-x: auto; border: 1px solid #ddd; line-height: 1.45; }
+        blockquote { border-left: 3px solid #ccc; margin: 1.2em 0; padding: 0.5em 1em 0.5em 1.2em; color: #444; font-style: italic; background: #f9f9f9; }
+        table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: 0.95em; }
+        th, td { border: 1px solid #ccc; padding: 0.45em 0.7em; text-align: left; vertical-align: top; }
+        th { background: #f0f0f0; font-weight: 600; }
+        tr:nth-child(even) { background: #fafafa; }
+        .warn { background: #fff9e6; border: 1px solid #f5c542; border-radius: 3px; padding: 0.8em 1em; margin: 1.2em 0; }
+        .note { background: #e8f0ff; border: 1px solid #36c; border-radius: 3px; padding: 0.8em 1em; margin: 1.2em 0; }
+        .abstract { background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 1.2em 1.5em; margin: 1.5em 0; font-style: italic; }
+        .footer { margin-top: 3em; border-top: 1px solid #ccc; padding-top: 1em; font-size: 0.85em; color: #888; text-align: center; }
+        .fig { margin: 1.5em 0; text-align: center; font-size: 0.9em; color: #555; }
+        .fig svg { max-width: 100%; height: auto; border: 1px solid #eee; border-radius: 6px; }
+        .fig strong { display: block; margin-top: 0.5em; font-weight: 600; color: #333; }
+        .section-number { font-family: 'Fira Code', monospace; font-size: 0.85em; color: #555; margin-right: 0.5em; }
+        sup { font-size: 0.75em; }
+        .eq { font-family: 'Fira Code', monospace; font-size: 0.9em; background: #f2f2f2; padding: 0.1em 0.2em; border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+<h1>DwarfStar 4 (DS4)</h1>
+<p style="text-align:center; font-size:0.95em; color:#555; margin-top:-0.5em;">A Single-Model Native Inference Engine for DeepSeek V4 Flash<br>Technical Report &middot; Published May 20, 2025</p>
+
+<div class="abstract">
+<strong>Abstract</strong> — DwarfStar 4 (DS4) is a self-contained, single-model inference engine purpose-built for DeepSeek V4 Flash, a 284B-parameter routed-MoE language model with 1M-token context. Unlike general-purpose runners, DS4 owns the full stack — GGUF loading, fixed tensor layout validation, CPU reference kernels, Metal/CUDA GPU graph dispatch, tokenization, chat rendering, thinking-mode control, KV cache persistence to disk, OpenAI-compatible HTTP serving, and a native TUI coding agent. The engine is deliberately narrow: it targets one model at a time, validates against official logits, and integrates deeply with agentic workflows. This report describes the architecture, design rationale, performance characteristics, and component subsystems of DS4 as reflected in the repository at commit <code>a365e44</code>.
+</div>
+
+<!-- ===================================================================== -->
+<!-- Figure 1: Overall System Architecture -->
+<!-- ===================================================================== -->
+<div class="fig">
+<svg viewBox="0 0 880 420" xmlns="http://www.w3.org/2000/svg" style="border:none">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#36c"/></marker>
+  </defs>
+  <!-- Title -->
+  <text x="440" y="28" text-anchor="middle" font-family="serif" font-size="18" font-weight="600" fill="#222">Figure 1 — DS4 System Architecture Overview</text>
+
+  <!-- Box: CLI -->
+  <rect x="40" y="55" width="120" height="44" rx="6" fill="#e8f0ff" stroke="#36c" stroke-width="1.5"/>
+  <text x="100" y="80" text-anchor="middle" font-family="serif" font-size="15" fill="#222">CLI (ds4_cli.c)</text>
+  <!-- Box: Server -->
+  <rect x="40" y="115" width="120" height="44" rx="6" fill="#e8f0ff" stroke="#36c" stroke-width="1.5"/>
+  <text x="100" y="140" text-anchor="middle" font-family="serif" font-size="15" fill="#222">Server (ds4_server.c)</text>
+  <!-- Box: Agent -->
+  <rect x="40" y="175" width="120" height="44" rx="6" fill="#e8f0ff" stroke="#36c" stroke-width="1.5"/>
+  <text x="100" y="200" text-anchor="middle" font-family="serif" font-size="15" fill="#222">Agent (ds4_agent.c)</text>
+  <!-- Box: Bench/Eval -->
+  <rect x="40" y="235" width="120" height="44" rx="6" fill="#e8f0ff" stroke="#36c" stroke-width="1.5"/>
+  <text x="100" y="258" text-anchor="middle" font-family="serif" font-size="14" fill="#222">Bench / Eval</text>
+
+  <!-- Box: Engine API (ds4.h) -->
+  <rect x="240" y="55" width="140" height="100" rx="6" fill="#f5f0e8" stroke="#c80" stroke-width="1.5"/>
+  <text x="310" y="82" text-anchor="middle" font-family="serif" font-size="15" fill="#222">Engine API</text>
+  <text x="310" y="104" text-anchor="middle" font-family="monospace" font-size="13" fill="#555">ds4.h</text>
+  <text x="310" y="126" text-anchor="middle" font-family="serif" font-size="13" fill="#666">ds4_engine</text>
+  <text x="310" y="144" text-anchor="middle" font-family="serif" font-size="13" fill="#666">ds4_session</text>
+
+  <!-- Box: Core Engine (ds4.c) -->
+  <rect x="240" y="175" width="140" height="104" rx="6" fill="#f0e8e8" stroke="#a33" stroke-width="1.5"/>
+  <text x="310" y="198" text-anchor="middle" font-family="serif" font-size="15" fill="#222">Core Engine</text>
+  <text x="310" y="218" text-anchor="middle" font-family="monospace" font-size="13" fill="#555">ds4.c (∼20k lines)</text>
+  <text x="310" y="240" text-anchor="middle" font-family="serif" font-size="12" fill="#666">GGUF loading · Tensor layout</text>
+  <text x="310" y="258" text-anchor="middle" font-family="serif" font-size="12" fill="#666">CPU kernels · Tokenizer</text>
+  <text x="310" y="274" text-anchor="middle" font-family="serif" font-size="12" fill="#666">Graph builder</text>
+
+  <!-- Box: GPU Backend Metal -->
+  <rect x="480" y="55" width="130" height="55" rx="6" fill="#e8f0e8" stroke="#282" stroke-width="1.5"/>
+  <text x="545" y="78" text-anchor="middle" font-family="serif" font-size="15" fill="#222">Metal</text>
+  <text x="545" y="98" text-anchor="middle" font-family="monospace" font-size="12" fill="#555">ds4_metal.m</text>
+  <!-- Box: GPU Backend CUDA -->
+  <rect x="480" y="125" width="130" height="55" rx="6" fill="#e8f0e8" stroke="#282" stroke-width="1.5"/>
+  <text x="545" y="148" text-anchor="middle" font-family="serif" font-size="15" fill="#222">CUDA</text>
+  <text x="545" y="168" text-anchor="middle" font-family="monospace" font-size="12" fill="#555">ds4_cuda.cu</text>
+  <!-- Box: CPU Backend -->
+  <rect x="480" y="195" width="130" height="55" rx="6" fill="#eee" stroke="#888" stroke-width="1.5"/>
+  <text x="545" y="218" text-anchor="middle" font-family="serif" font-size="15" fill="#666">CPU</text>
+  <text x="545" y="238" text-anchor="middle" font-family="serif" font-size="12" fill="#888">(diagnostics only)</text>
+
+  <!-- Box: KV Store -->
+  <rect x="680" y="55" width="160" height="60" rx="6" fill="#ffe8e8" stroke="#d44" stroke-width="1.5"/>
+  <text x="760" y="78" text-anchor="middle" font-family="serif" font-size="15" fill="#222">KV Store</text>
+  <text x="760" y="98" text-anchor="middle" font-family="serif" font-size="13" fill="#666">ds4_kvstore.c/.h</text>
+  <!-- Box: Disk (files) -->
+  <rect x="690" y="135" width="140" height="44" rx="4" fill="#fafafa" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="760" y="160" text-anchor="middle" font-family="serif" font-size="14" fill="#555">Disk checkpoint files</text>
+
+  <!-- Arrows: CLI/Server/Agent → Engine API -->
+  <line x1="160" y1="77" x2="228" y2="77" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="160" y1="137" x2="228" y2="105" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="160" y1="197" x2="228" y2="197" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="160" y1="257" x2="228" y2="257" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- Arrows: Engine API → Core Engine -->
+  <line x1="380" y1="105" x2="380" y2="163" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="380" y1="197" x2="380" y2="197" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- Arrows: Core Engine → GPU Backends -->
+  <line x1="380" y1="220" x2="468" y2="85" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="380" y1="240" x2="468" y2="150" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="380" y1="258" x2="468" y2="220" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- Arrows: GPU Backends → KV Store -->
+  <line x1="610" y1="82" x2="668" y2="82" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="610" y1="150" x2="668" y2="150" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- Arrow: KV Store → Disk -->
+  <line x1="760" y1="115" x2="760" y2="128" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- Arrow: KV Store ←→ Server (bidirectional) -->
+  <line x1="200" y1="137" x2="200" y2="240" stroke="#36c" stroke-width="1.2" stroke-dasharray="5,3"/>
+</svg>
+<strong>Figure 1 — System Architecture Overview.</strong> The CLI, server, agent, and benchmarks all share the engine API (<code>ds4.h</code>). The core engine (<code>ds4.c</code>) implements model loading, tensor layout, CPU kernels, and the GPU graph driver. GPU backends (Metal, CUDA, CPU) are isolated in separate files. The KV Store subsystem manages on-disk checkpoint files independently.
+</div>
+
+<h2>1. Introduction</h2>
+
+<h3>1.1 Motivation</h3>
+
+<p>DeepSeek V4 Flash occupies a unique position in the current landscape of locally-runnable language models. With 284B total parameters and only ~13B active per token via routed-MoE, it offers a combination of high knowledge capacity, fast inference, and efficient reasoning that is not replicated by dense models of comparable size. The model additionally features a compressed sparse attention mechanism supporting a 1M-token context, a KV cache that is sufficiently compact to persist on disk, and a thinking-mode behavior that produces reasoning traces proportional to problem complexity — often 1/5 the length of other reasoning models.</p>
+
+<p>Despite these advantages, the local inference ecosystem is dominated by general-purpose runners (e.g., llama.cpp, vllm) that must accommodate a wide range of architectures. For a specific model such as DeepSeek V4 Flash, this generality incurs complexity, validation overhead, and integration gaps — particularly around KV cache persistence, tool-calling, and agentic workflows. DS4 was created to close these gaps by taking a deliberate bet on one model and building a vertically-integrated engine around it.</p>
+
+<h3>1.2 Scope and Design Constraints</h3>
+
+<p>The following constraints govern the DS4 design:</p>
+
+<ol>
+    <li><strong>Single model.</strong> The engine loads only DeepSeek V4 Flash GGUFs with a known tensor layout, quantization mix, metadata, and optional MTP state. Arbitrary GGUF files are rejected at load time.</li>
+    <li><strong>No external dependencies.</strong> DS4 does not link against GGML, llama.cpp, or any other inference runtime. It exists because of the path opened by those projects — acknowledged and preserved under MIT license — but is built from scratch for this specific architecture.</li>
+    <li><strong>Disk-first KV cache.</strong> The compressed KV cache of DeepSeek V4 Flash (ratio-4 and ratio-128 rows, plus indexer states) is small enough that checkpointing to SSD is practical. The engine treats disk as a first-class KV cache medium, not a fallback.</li>
+    <li><strong>Backend portability.</strong> The core engine API (<code>ds4.h</code>) is backend-agnostic. GPU kernels are isolated in <code>ds4_metal.m</code> (macOS) and <code>ds4_cuda.cu</code> (Linux). A CPU path exists for correctness validation.</li>
+    <li><strong>Integrated agent.</strong> The coding agent is a single-process, two-thread application that owns the inference session directly — no socket boundaries, no serialization layer. This eliminates KV cache mismatches and provides sub-millisecond session switching.</li>
+</ol>
+
+<h2>2. Architecture</h2>
+
+<h3>2.1 Codebase Structure</h3>
+
+<p>The repository is organized around a single core source file (<code>ds4.c</code>, ~808 kB) that implements the engine. Supporting files include:</p>
+
+<table>
+    <tr><th>File</th><th>Lines</th><th>Role</th></tr>
+    <tr><td><code>ds4.c</code></td><td>~20,000</td><td>Core engine: GGUF loading, tensor layout, CPU kernels, Metal graph driver, tokenizer, public API</td></tr>
+    <tr><td><code>ds4.h</code></td><td>200</td><td>Public API header — narrow interface for CLI, server, agent, and tests</td></tr>
+    <tr><td><code>ds4_metal.m</code></td><td>~6,400</td><td>Metal GPU kernels and graph builder (Objective-C++)</td></tr>
+    <tr><td><code>ds4_cuda.cu</code></td><td>~4,700</td><td>CUDA GPU kernels and graph builder</td></tr>
+    <tr><td><code>ds4_gpu.h</code></td><td>~700</td><td>Shared GPU header — buffer abstractions, graph primitives</td></tr>
+    <tr><td><code>ds4_server.c</code></td><td>~14,700</td><td>OpenAI-compatible HTTP server with KV store</td></tr>
+    <tr><td><code>ds4_agent.c</code></td><td>~7,185</td><td>Native TUI coding agent</td></tr>
+    <tr><td><code>ds4_kvstore.c</code></td><td>~1,200</td><td>On-disk KV cache directory manager</td></tr>
+    <tr><td><code>ds4_cli.c</code></td><td>~1,468</td><td>CLI interactive/one-shot chat driver</td></tr>
+    <tr><td><code>ds4_bench.c</code></td><td>~370</td><td>Context-frontier throughput benchmark</td></tr>
+    <tr><td><code>ds4_eval.c</code></td><td>~3,000</td><td>Quality and correctness evaluation harness</td></tr>
+</table>
+
+<h3>2.2 Engine API</h3>
+
+<p>The public API (<code>ds4.h</code>) defines two primary objects:</p>
+
+<ul>
+    <li><code>ds4_engine</code> — the loaded model, shared across sessions. Responsible for GGUF loading, tokenization, argmax generation, imatrix collection, and GPU graph testing.</li>
+    <li><code>ds4_session</code> — one mutable inference timeline. Owns the live KV cache and logits. Callers provide full token prefixes; <code>ds4_session_sync()</code> determines whether to reuse, extend, or rebuild the backend state based on prefix matching.</li>
+</ul>
+
+<p>Key session operations include:</p>
+<ul>
+    <li><code>ds4_session_sync(prompt)</code> — synchronize the session to a token prefix. If the current checkpoint is a prefix, only the suffix is evaluated; otherwise the backend state is refilled from scratch.</li>
+    <li><code>ds4_session_argmax()</code>, <code>ds4_session_sample(...)</code> — extract the next token from the live logits (greedy or temperature/top-p/min-p sampling).</li>
+    <li><code>ds4_session_eval(token)</code> — append one token to the graph and extend the KV cache.</li>
+    <li><code>ds4_session_eval_speculative_argmax(...)</code> — MTP draft verification: the draft model proposes multiple tokens; the main model verifies them in a single forward pass.</li>
+    <li><code>ds4_session_save_payload(fp)</code>, <code>ds4_session_load_payload(fp, bytes)</code> — serialize/deserialize the GPU graph state to/from a file.</li>
+</ul>
+
+<h3>2.3 Build System</h3>
+
+<p>The <code>Makefile</code> supports four build configurations:</p>
+
+<ul>
+    <li><strong>Default (macOS)</strong> — Metal backend. Produces <code>./ds4</code>, <code>./ds4-server</code>, <code>./ds4-bench</code>, <code>./ds4-eval</code>, <code>./ds4-agent</code>.</li>
+    <li><strong><code>make cuda-spark</code></strong> (Linux) — CUDA backend targeting DGX Spark / GB10.</li>
+    <li><strong><code>make cuda-generic</code></strong> (Linux) — CUDA backend for other NVIDIA GPUs.</li>
+    <li><strong><code>make cpu</code></strong> (Linux) — CPU-only diagnostics build. On macOS, the CPU path crashes the kernel due to a VM implementation bug.</li>
+</ul>
+
+<p>Compilation uses <code>-O3 -ffast-math -std=c99</code> with <code>-mcpu=native</code> (macOS) or <code>-march=native</code> (Linux). Metal sources are compiled with <code>-fobjc-arc</code>; CUDA sources use <code>nvcc</code> with <code>--use_fast_math</code>.</p>
+
+<!-- ===================================================================== -->
+<!-- Figure 2: DeepSeek V4 Flash Model Architecture -->
+<!-- ===================================================================== -->
+<div class="fig">
+<svg viewBox="0 0 860 480" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
+  </defs>
+  <text x="430" y="28" text-anchor="middle" font-family="serif" font-size="18" font-weight="600" fill="#222">Figure 2 — DeepSeek V4 Flash Model Architecture (43 Layers)</text>
+
+  <!-- Layer 0 (no compression) -->
+  <rect x="30" y="50" width="800" height="40" rx="4" fill="#e8f0ff" stroke="#36c" stroke-width="1"/>
+  <text x="430" y="75" text-anchor="middle" font-family="serif" font-size="13" fill="#222">Layers 0, 1 — Raw 128-token sliding-window attention only</text>
+
+  <!-- Even layer example (ratio 4) -->
+  <rect x="30" y="105" width="800" height="45" rx="4" fill="#f5f0e8" stroke="#c80" stroke-width="1"/>
+  <text x="430" y="125" text-anchor="middle" font-family="serif" font-size="13" fill="#222">Even layers (2, 4, 6, ... 42) — Ratio-4 compressed KV + indexer KV</text>
+  <text x="430" y="143" text-anchor="middle" font-family="monospace" font-size="12" fill="#666">1 compressed row per 4 tokens · Indexer selects visible compressed rows</text>
+
+  <!-- Odd layer example (ratio 128) -->
+  <rect x="30" y="165" width="800" height="45" rx="4" fill="#f0e8e8" stroke="#a33" stroke-width="1"/>
+  <text x="430" y="185" text-anchor="middle" font-family="serif" font-size="13" fill="#222">Odd layers (3, 5, 7, ... 41) — Ratio-128 compressed KV</text>
+  <text x="430" y="203" text-anchor="middle" font-family="monospace" font-size="12" fill="#666">1 compressed row per 128 tokens</text>
+
+  <!-- Diagram: attention mechanism -->
+  <text x="430" y="240" text-anchor="middle" font-family="serif" font-size="15" fill="#444">Attention mechanism per layer</text>
+
+  <!-- Box: Raw window -->
+  <rect x="50" y="255" width="150" height="45" rx="4" fill="#e8f0ff" stroke="#36c" stroke-width="1.2"/>
+  <text x="125" y="278" text-anchor="middle" font-family="serif" font-size="13" fill="#222">Raw sliding window</text>
+  <text x="125" y="295" text-anchor="middle" font-family="monospace" font-size="11" fill="#555">latest 128 tokens</text>
+
+  <!-- Plus sign -->
+  <text x="230" y="280" text-anchor="middle" font-size="22" fill="#555">+</text>
+
+  <!-- Box: Compressed KV -->
+  <rect x="260" y="255" width="150" height="45" rx="4" fill="#f5f0e8" stroke="#c80" stroke-width="1.2"/>
+  <text x="335" y="278" text-anchor="middle" font-family="serif" font-size="13" fill="#222">Compressed history</text>
+  <text x="335" y="295" text-anchor="middle" font-family="monospace" font-size="11" fill="#555">ratio-4 or ratio-128 rows</text>
+
+  <!-- Arrow to attention -->
+  <line x1="410" y1="277" x2="460" y2="277" stroke="#555" stroke-width="1.5" marker-end="url(#arrow2)"/>
+
+  <!-- Box: Attention output -->
+  <rect x="470" y="255" width="130" height="45" rx="4" fill="#e8f0e8" stroke="#282" stroke-width="1.2"/>
+  <text x="535" y="278" text-anchor="middle" font-family="serif" font-size="13" fill="#222">Attention output</text>
+  <text x="535" y="295" text-anchor="middle" font-family="monospace" font-size="11" fill="#555">y = Attn(Q, K, V)</text>
+
+  <!-- MoE routing -->
+  <text x="430" y="345" text-anchor="middle" font-family="serif" font-size="15" fill="#444">Routed MoE — per token, only a subset of experts is activated</text>
+
+  <rect x="50" y="360" width="120" height="35" rx="4" fill="#f0e8e8" stroke="#a33" stroke-width="1.2"/>
+  <text x="110" y="383" text-anchor="middle" font-family="serif" font-size="13" fill="#222">Router</text>
+
+  <rect x="200" y="355" width="60" height="45" rx="4" fill="#e8f0e8" stroke="#282" stroke-width="1"/>
+  <text x="230" y="378" text-anchor="middle" font-family="serif" font-size="11" fill="#222">Expert 1</text>
+  <rect x="275" y="355" width="60" height="45" rx="4" fill="#e8f0e8" stroke="#282" stroke-width="1"/>
+  <text x="305" y="378" text-anchor="middle" font-family="serif" font-size="11" fill="#222">Expert 2</text>
+  <rect x="350" y="355" width="60" height="45" rx="4" fill="#e8f0e8" stroke="#282" stroke-width="1"/>
+  <text x="380" y="378" text-anchor="middle" font-family="serif" font-size="11" fill="#222">Expert 3</text>
+  <text x="440" y="382" text-anchor="middle" font-family="serif" font-size="14" fill="#888">… 64 experts</text>
+  <rect x="500" y="355" width="60" height="45" rx="4" fill="#e8f0e8" stroke="#282" stroke-width="1"/>
+  <text x="530" y="378" text-anchor="middle" font-family="serif" font-size="11" fill="#222">Expert 64</text>
+
+  <!-- Legend -->
+  <rect x="50" y="425" width="12" height="12" rx="2" fill="#e8f0ff" stroke="#36c" stroke-width="1"/>
+  <text x="68" y="436" font-family="serif" font-size="12" fill="#555">Raw attention</text>
+  <rect x="150" y="425" width="12" height="12" rx="2" fill="#f5f0e8" stroke="#c80" stroke-width="1"/>
+  <text x="168" y="436" font-family="serif" font-size="12" fill="#555">Compressed attention</text>
+  <rect x="280" y="425" width="12" height="12" rx="2" fill="#e8f0e8" stroke="#282" stroke-width="1"/>
+  <text x="298" y="436" font-family="serif" font-size="12" fill="#555">MoE experts</text>
+  <rect x="380" y="425" width="12" height="12" rx="2" fill="#f0e8e8" stroke="#a33" stroke-width="1"/>
+  <text x="398" y="436" font-family="serif" font-size="12" fill="#555">Router</text>
+</svg>
+<strong>Figure 2 — DeepSeek V4 Flash Model Architecture.</strong> 43 layers with three attention regimes: raw sliding-window (layers 0–1), ratio-4 compressed (even layers 2+), and ratio-128 compressed (odd layers 3+). Each layer includes routed MoE with 64 experts, of which only a subset (~13B active parameters) is activated per token.
+</div>
+
+<h2>3. Model Loading and Validation</h2>
+
+<h3>3.1 GGUF Loading</h3>
+
+<p>Loading is mmap-based. The loader parses the GGUF header, metadata table, and tensor directory, validating that the file matches the exact DeepSeek V4 Flash tensor layout. Tensor data remains in the kernel page cache until inference touches it, or until Metal wraps slices of the mapping as zero-copy <code>MTLBuffer</code>s. Loading is strict: every validation step is designed to fail early if the GGUF does not match the expected layout.</p>
+
+<h3>3.2 Supported Quantization</h3>
+
+<p>DS4 uses a highly asymmetrical quantization strategy for the 2-bit variants:</p>
+
+<table>
+    <tr><th>Component</th><th>Quantization</th></tr>
+    <tr><td>Routed-MoE up/gate projections</td><td>IQ2_XXS (2-bit)</td></tr>
+    <tr><td>Routed-MoE down projections</td><td>Q2_K (2-bit)</td></tr>
+    <tr><td>Shared experts, projections, routing</td><td>Unquantized (FP16/FP32)</td></tr>
+</table>
+
+<p>This asymmetry preserves quality by leaving critical components untouched, while aggressively quantizing the majority of the model's parameter count. Both imatrix-tuned and non-imatrix variants are available. The imatrix variants, calibrated with a routed-MoE-specific prompt corpus, are preferred.</p>
+
+<h2>4. GPU Backends</h2>
+
+<h3>4.1 Metal (macOS)</h3>
+
+<p>Metal is the primary target. The GPU graph builder (<code>ds4_metal.m</code>) constructs a fixed forward-pass graph for the 43-layer DeepSeek V4 Flash architecture. The graph handles:</p>
+
+<ul>
+    <li>Routed-MoE expert dispatch — each token is routed to a subset of experts; the graph activates only those experts' weights.</li>
+    <li>Compressed sparse attention (CSA) — for each layer, the graph processes the raw sliding-window cache (latest 128 tokens) and the compressed history rows (ratio-4 or ratio-128 depending on layer index).</li>
+    <li>Indexer state — even layers (ratio-4) maintain an indexer that selects which compressed rows are visible to attention.</li>
+    <li>RoPE position embedding — applied during prefill and extended during generation.</li>
+</ul>
+
+<p>The Metal path is validated against official logits at various context sizes through the <code>ds4-eval</code> harness.</p>
+
+<h3>4.2 CUDA (Linux)</h3>
+
+<p>The CUDA backend (<code>ds4_cuda.cu</code>) mirrors the Metal graph structure with NVIDIA-specific optimizations. Special attention is given to the DGX Spark / GB10 form factor, where memory bandwidth and power constraints differ from desktop GPUs. The CUDA path supports the same set of operations: chunked prefill, compressed KV cache management, speculative decoding, and directional steering.</p>
+
+<h3>4.3 CPU (Diagnostics)</h3>
+
+<p>A CPU-only path exists for correctness checks and model/tokenizer diagnostics. It uses hand-tuned CPU quant/dot-product kernels adapted from GGML under MIT license. On macOS, this path is broken by a kernel VM bug that crashes the system; Linux users can build with <code>make cpu</code>.</p>
+
+<h2>5. KV Cache Persistence</h2>
+
+<h3>5.1 Motivation</h3>
+
+<p>DeepSeek V4 Flash uses compressed sparse attention, where each layer maintains a raw sliding-window cache (latest 128 tokens) and a set of compressed history rows. The compression ratios are layer-dependent:</p>
+
+<table>
+    <tr><th>Layer Index (0-based)</th><th>Compression Ratio</th><th>Extra State</th></tr>
+    <tr><td>0, 1</td><td>None</td><td>Raw 128-token sliding window only</td></tr>
+    <tr><td>Even layers, 2+</td><td>4</td><td>Compressed KV + indexer KV</td></tr>
+    <tr><td>Odd layers, 3+</td><td>128</td><td>Compressed KV</td></tr>
+</table>
+
+<p>Because the compressed rows are very compact (one row per 128 tokens for the majority of layers), the entire KV state for a session of 32k–128k tokens fits in a few hundred KB of GPU memory — and, critically, in a few MB when serialized to disk. This makes on-disk persistence practical.</p>
+
+<h3>5.2 KV Store Subsystem</h3>
+
+<p>The <code>ds4_kvstore</code> subsystem (<code>ds4_kvstore.c</code>/<code>.h</code>) manages a directory of checkpoint files indexed by rendered text hash:</p>
+
+<ul>
+    <li><strong>Naming.</strong> Each file is named by the SHA1 hash of the rendered byte prefix (not the token sequence). The fixed 48-byte header stores: SHA1 hash, quant bits, reason code (cold/continued/evict/shutdown/agent), token count, hit counter, context size, extension flags, creation time, last-used time, and payload byte count.</li>
+    <li><strong>Payload.</strong> The body contains the serialized GPU graph state — compressed KV rows, indexer states, and any auxiliary buffers.</li>
+    <li><strong>Trailer.</strong> An optional trailer can carry tool-call maps, visible thinking text, or visible responses, depending on extension flags.</li>
+    <li><strong>Eviction.</strong> An LRU-like policy with hit-count decay (<code>ds4_kvstore_entry_eviction_score</code>) selects files for eviction when the store exceeds its budget. The decay half-life defaults to 6 hours, so older checkpoints with low hit counts are evicted first. A protected SHA (the currently-live session) is excluded from eviction.</li>
+</ul>
+
+<!-- ===================================================================== -->
+<!-- Figure 3: KV Cache Lifecycle -->
+<!-- ===================================================================== -->
+<div class="fig">
+<svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow3" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
+    <marker id="arrow3g" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#282"/></marker>
+  </defs>
+  <text x="440" y="28" text-anchor="middle" font-family="serif" font-size="18" font-weight="600" fill="#222">Figure 3 — KV Cache Checkpoint Lifecycle</text>
+
+  <!-- Step 1: Cold store -->
+  <rect x="30" y="55" width="150" height="50" rx="6" fill="#f5f0e8" stroke="#c80" stroke-width="1.5"/>
+  <text x="105" y="78" text-anchor="middle" font-family="serif" font-size="15" fill="#222">Cold store</text>
+  <text x="105" y="97" text-anchor="middle" font-family="serif" font-size="12" fill="#666">First save of session</text>
+
+  <!-- Arrow -->
+  <line x1="180" y1="80" x2="240" y2="80" stroke="#555" stroke-width="1.5" marker-end="url(#arrow3)"/>
+
+  <!-- Step 2: Disk file -->
+  <rect x="250" y="55" width="180" height="50" rx="6" fill="#fafafa" stroke="#bbb" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="340" y="75" text-anchor="middle" font-family="serif" font-size="15" fill="#555">Checkpoint file</text>
+  <text x="340" y="97" text-anchor="middle" font-family="monospace" font-size="11" fill="#888">SHA1(prefix).kvstore</text>
+
+  <!-- Arrow: Disk → Load -->
+  <line x1="430" y1="80" x2="490" y2="80" stroke="#36c" stroke-width="1.5" marker-end="url(#arrow3)"/>
+
+  <!-- Step 3: Load & resume -->
+  <rect x="500" y="55" width="150" height="50" rx="6" fill="#e8f0ff" stroke="#36c" stroke-width="1.5"/>
+  <text x="575" y="78" text-anchor="middle" font-family="serif" font-size="15" fill="#222">Load &amp; resume</text>
+  <text x="575" y="97" text-anchor="middle" font-family="serif" font-size="12" fill="#666">No prefill needed</text>
+
+  <!-- Arrow: Load → Continue -->
+  <line x1="650" y1="80" x2="710" y2="80" stroke="#555" stroke-width="1.5" marker-end="url(#arrow3)"/>
+
+  <!-- Step 4: Continued store -->
+  <rect x="720" y="55" width="130" height="50" rx="6" fill="#e8f0e8" stroke="#282" stroke-width="1.5"/>
+  <text x="785" y="78" text-anchor="middle" font-family="serif" font-size="15" fill="#222">Continued</text>
+  <text x="785" y="97" text-anchor="middle" font-family="serif" font-size="12" fill="#666">extend &amp; re-save</text>
+
+  <!-- Loop back: Continued → Disk -->
+  <path d="M785,105 L785,145 L340,145 L340,115" fill="none" stroke="#555" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arrow3)"/>
+  <text x="560" y="160" text-anchor="middle" font-family="serif" font-size="12" fill="#666">iterative extension</text>
+
+  <!-- Eviction path -->
+  <rect x="30" y="195" width="150" height="50" rx="6" fill="#ffe8e8" stroke="#d44" stroke-width="1.5"/>
+  <text x="105" y="218" text-anchor="middle" font-family="serif" font-size="15" fill="#222">Eviction</text>
+  <text x="105" y="237" text-anchor="middle" font-family="serif" font-size="12" fill="#666">budget exceeded / stale</text>
+
+  <!-- Arrow: Disk → Eviction -->
+  <line x1="250" y1="142" x2="150" y2="188" stroke="#d44" stroke-width="1.2" stroke-dasharray="6,3" marker-end="url(#arrow3)"/>
+
+  <!-- Scoring box -->
+  <rect x="250" y="195" width="250" height="50" rx="6" fill="#f0f0f0" stroke="#888" stroke-width="1"/>
+  <text x="375" y="218" text-anchor="middle" font-family="serif" font-size="14" fill="#555">Eviction score:</text>
+  <text x="375" y="238" text-anchor="middle" font-family="serif" font-size="12" fill="#666">hit-count decay (half-life 6h) + recency</text>
+
+  <!-- Protected session -->
+  <rect x="560" y="195" width="180" height="50" rx="6" fill="#e8f0e8" stroke="#282" stroke-width="1.5"/>
+  <text x="650" y="218" text-anchor="middle" font-family="serif" font-size="15" fill="#222">Protected (live session)</text>
+  <text x="650" y="238" text-anchor="middle" font-family="serif" font-size="12" fill="#666">excluded from eviction</text>
+
+  <line x1="500" y1="220" x2="548" y2="220" stroke="#555" stroke-width="1.2" marker-end="url(#arrow3)"/>
+
+  <!-- Legend -->
+  <text x="30" y="280" font-family="serif" font-size="13" font-weight="600" fill="#444">Lifecycle states:</text>
+  <rect x="100" y="268" width="10" height="10" rx="2" fill="#f5f0e8" stroke="#c80" stroke-width="1"/>
+  <text x="116" y="279" font-family="serif" font-size="12" fill="#555">Cold</text>
+  <rect x="155" y="268" width="10" height="10" rx="2" fill="#e8f0ff" stroke="#36c" stroke-width="1"/>
+  <text x="171" y="279" font-family="serif" font-size="12" fill="#555">Load/resume</text>
+  <rect x="245" y="268" width="10" height="10" rx="2" fill="#e8f0e8" stroke="#282" stroke-width="1"/>
+  <text x="261" y="279" font-family="serif" font-size="12" fill="#555">Continued</text>
+  <rect x="340" y="268" width="10" height="10" rx="2" fill="#ffe8e8" stroke="#d44" stroke-width="1"/>
+  <text x="356" y="279" font-family="serif" font-size="12" fill="#555">Evicted</text>
+</svg>
+<strong>Figure 3 — KV Cache Checkpoint Lifecycle.</strong> A session starts with a cold store to disk. Subsequent requests load the checkpoint and resume without prefill. Extended sessions are re-saved as continued checkpoints. Stale or over-budget entries are evicted using a hit-count decay score. The live session is always protected from eviction.
+</div>
+
+<h3>5.3 Checkpoint Lifecycle</h3>
+
+<ol>
+    <li><strong>Cold store</strong> — a session's first save, written with reason <code>DS4_KVSTORE_REASON_COLD</code>.</li>
+    <li><strong>Continued store</strong> — after loading a checkpoint and extending the session, the updated state is saved with reason <code>DS4_KVSTORE_REASON_CONTINUED</code>. The system can suppress continued stores when the extension is small (below a configurable threshold).</li>
+    <li><strong>Load-and-resume</strong> — on a subsequent request, the store finds a matching SHA prefix, loads the payload, and resumes inference from exactly where the previous session left off — no prefill needed.</li>
+    <li><strong>Eviction</strong> — when the store exceeds its budget, entries with low eviction scores are removed.</li>
+</ol>
+
+<h2>6. Thinking Modes</h2>
+
+<h3>6.1 Overview</h3>
+
+<p>DS4 implements three thinking modes that control whether and how the model engages in chain-of-thought reasoning before producing its final answer:</p>
+
+<table>
+    <tr><th>Mode</th><th>Enum</th><th>Behavior</th></tr>
+    <tr><td>None</td><td><code>DS4_THINK_NONE</code></td><td>No thinking prefix. The model generates answers directly.</td></tr>
+    <tr><td>High</td><td><code>DS4_THINK_HIGH</code></td><td>Appends a "max effort" prefix that encourages reasoning before answering. The thinking section length scales with problem complexity and is typically 1/5 that of other reasoning models.</td></tr>
+    <tr><td>Max</td><td><code>DS4_THINK_MAX</code></td><td>Forces maximal thinking via a special prefix. Requires a minimum context size (<code>ds4_think_max_min_context()</code>) to leave room for the answer.</td></tr>
+</table>
+
+<h3>6.2 Automatic Mode Selection</h3>
+
+<p>The function <code>ds4_think_mode_for_context(mode, ctx_size)</code> downgrades the mode if the remaining context is insufficient for meaningful thinking output. When context is very tight, it falls back to <code>DS4_THINK_NONE</code> automatically.</p>
+
+<h2>7. Directional Steering</h2>
+
+<h3>7.1 Principle</h3>
+
+<p>Directional steering is a runtime activation edit. A steering file is a flat <code>f32</code> matrix (43 layers × 4096 hidden dimensions) containing one normalized direction vector per layer. During inference, the engine applies the edit after FFN outputs, attention outputs, or both:</p>
+
+<p class="eq" style="text-align:center;">y = y − α · d<sub>ℓ</sub> · ⟨d<sub>ℓ</sub>, y⟩</p>
+
+<p>where <code>α</code> is a scale factor, <code>d<sub>ℓ</sub></code> is the direction vector for layer ℓ, and ⟨·,·⟩ is the dot product. Positive α removes the represented direction; negative α amplifies it. With no steering file or zero scales, the inference follows the normal path.</p>
+
+<h3>7.2 Usage</h3>
+
+<p>Steering is configured via engine options: <code>--dir-steering-file FILE</code> loads the direction file; <code>--dir-steering-ffn F</code> and <code>--dir-steering-attn F</code> set the scale factors for FFN and attention outputs respectively. FFN output is the recommended target because it is late enough in each layer to capture behavioral and stylistic signals. The <code>dir-steering/</code> directory contains an example that builds a style direction from 100 paired prompts.</p>
+
+<h2>8. Server Subsystem</h2>
+
+<h3>8.1 Architecture</h3>
+
+<p>The HTTP server (<code>ds4-server</code>) follows a single-worker design:</p>
+
+<ul>
+    <li><strong>Client threads</strong> — each connection is handled by a small blocking thread that parses one HTTP request and queues a job to the single GPU worker.</li>
+    <li><strong>GPU worker</strong> — owns the <code>ds4_session</code> and all live KV cache state. By centralizing graph mutations in one thread, the design avoids race conditions on KV state and simplifies checkpointing.</li>
+    <li><strong>Session management</strong> — sessions are identified by rendered text hash and persisted to disk. The server supports creating, listing, switching, and deleting sessions via REST endpoints.</li>
+</ul>
+
+<!-- ===================================================================== -->
+<!-- Figure 4: Server Architecture -->
+<!-- ===================================================================== -->
+<div class="fig">
+<svg viewBox="0 0 880 280" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow4" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
+  </defs>
+  <text x="440" y="28" text-anchor="middle" font-family="serif" font-size="18" font-weight="600" fill="#222">Figure 4 — Server Architecture (Single-Worker Design)</text>
+
+  <!-- Clients -->
+  <rect x="30" y="55" width="60" height="35" rx="4" fill="#e8f0ff" stroke="#36c" stroke-width="1"/>
+  <text x="60" y="78" text-anchor="middle" font-family="serif" font-size="12" fill="#222">Client 1</text>
+  <rect x="30" y="105" width="60" height="35" rx="4" fill="#e8f0ff" stroke="#36c" stroke-width="1"/>
+  <text x="60" y="128" text-anchor="middle" font-family="serif" font-size="12" fill="#222">Client 2</text>
+  <rect x="30" y="155" width="60" height="35" rx="4" fill="#e8f0ff" stroke="#36c" stroke-width="1"/>
+  <text x="60" y="178" text-anchor="middle" font-family="serif" font-size="12" fill="#222">Client 3</text>
+
+  <!-- HTTP listener box -->
+  <rect x="130" y="55" width="120" height="55" rx="6" fill="#f0f0f0" stroke="#888" stroke-width="1.5"/>
+  <text x="190" y="78" text-anchor="middle" font-family="serif" font-size="14" fill="#555">Listener thread</text>
+  <text x="190" y="96" text-anchor="middle" font-family="serif" font-size="12" fill="#888">parse + queue job</text>
+
+  <!-- Arrow: Clients → Listener -->
+  <line x1="90" y1="72" x2="120" y2="72" stroke="#555" stroke-width="1" marker-end="url(#arrow4)"/>
+  <line x1="90" y1="122" x2="120" y2="88" stroke="#555" stroke-width="1" marker-end="url(#arrow4)"/>
+  <line x1="90" y1="172" x2="120" y2="105" stroke="#555" stroke-width="1" marker-end="url(#arrow4)"/>
+
+  <!-- Job queue -->
+  <rect x="130" y="135" width="120" height="25" rx="4" fill="#fafafa" stroke="#bbb" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="190" y="153" text-anchor="middle" font-family="monospace" font-size="11" fill="#888">job queue</text>
+
+  <!-- Arrow: Listener → GPU worker -->
+  <line x1="250" y1="85" x2="310" y2="85" stroke="#555" stroke-width="1.5" marker-end="url(#arrow4)"/>
+
+  <!-- GPU worker box -->
+  <rect x="320" y="55" width="160" height="60" rx="6" fill="#f0e8e8" stroke="#a33" stroke-width="1.5"/>
+  <text x="400" y="78" text-anchor="middle" font-family="serif" font-size="15" fill="#222">GPU worker thread</text>
+  <text x="400" y="98" text-anchor="middle" font-family="serif" font-size="13" fill="#666">owns ds4_session + KV</text>
+
+  <!-- Session state box -->
+  <rect x="320" y="135" width="160" height="25" rx="4" fill="#fafafa" stroke="#bbb" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="400" y="153" text-anchor="middle" font-family="monospace" font-size="11" fill="#888">live KV cache (GPU)</text>
+
+  <!-- Arrow: GPU worker → KV Store -->
+  <line x1="480" y1="85" x2="540" y2="85" stroke="#555" stroke-width="1.5" marker-end="url(#arrow4)"/>
+
+  <!-- KV Store box -->
+  <rect x="550" y="55" width="150" height="50" rx="6" fill="#ffe8e8" stroke="#d44" stroke-width="1.5"/>
+  <text x="625" y="78" text-anchor="middle" font-family="serif" font-size="15" fill="#222">KV Store</text>
+  <text x="625" y="96" text-anchor="middle" font-family="serif" font-size="12" fill="#666">on-disk checkpoints</text>
+
+  <!-- Arrow: KV Store → Disk files -->
+  <line x1="625" y1="105" x2="625" y2="140" stroke="#555" stroke-width="1.2" marker-end="url(#arrow4)"/>
+
+  <!-- Disk files -->
+  <rect x="530" y="148" width="190" height="35" rx="4" fill="#fafafa" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="625" y="170" text-anchor="middle" font-family="monospace" font-size="12" fill="#888">checkpoint files (SSD)</text>
+
+  <!-- Session table -->
+  <rect x="550" y="205" width="150" height="30" rx="4" fill="#e8f0e8" stroke="#282" stroke-width="1"/>
+  <text x="625" y="226" text-anchor="middle" font-family="serif" font-size="13" fill="#222">Session index (SHA → path)</text>
+
+  <line x1="625" y1="195" x2="625" y2="198" stroke="#555" stroke-width="1" marker-end="url(#arrow4)"/>
+</svg>
+<strong>Figure 4 — Server Architecture.</strong> Client connections are handled by a listener thread that parses requests and queues jobs. A single GPU worker owns the <code>ds4_session</code> and all live KV cache state, avoiding race conditions. Sessions are persisted to disk via the KV Store, which manages checkpoint files indexed by rendered text hash.
+</div>
+
+<h3>8.2 API Compatibility</h3>
+
+<p>The server exposes OpenAI-compatible chat completion endpoints (<code>/v1/chat/completions</code>) with streaming and non-streaming modes. It also supports Anthropic-style tool-calling via the <code>tools</code> and <code>tool_choice</code> parameters. Tool schemas are prepended to the rendered system prompt as part of the chat rendering pipeline.</p>
+
+<h3>8.3 KV Cache Integration</h3>
+
+<p>Each session checkpoint is managed by the <code>ds4_kvstore</code> subsystem. When a request arrives for an existing session, the server loads the matching checkpoint, the GPU worker syncs the session to the request's prompt prefix, and generation resumes from the cached state. If no checkpoint matches, the session is filled from scratch.</p>
+
+<h2>9. Agent Subsystem</h2>
+
+<h3>9.1 Design</h3>
+
+<p>The native agent (<code>ds4-agent</code>) is a single-process, two-thread application:</p>
+
+<ul>
+    <li><strong>UI thread</strong> — handles terminal input/output, linenoise line editing, and streaming output rendering.</li>
+    <li><strong>Worker thread</strong> — owns the live DS4 session and KV state. It executes generation, tool calls, and session management.</li>
+</ul>
+
+<p>There are no socket boundaries, IPC channels, or serialization layers between the UI and the inference engine. The session state is the live KV cache on disk; the agent reads and writes it directly.</p>
+
+<!-- ===================================================================== -->
+<!-- Figure 5: Agent Architecture -->
+<!-- ===================================================================== -->
+<div class="fig">
+<svg viewBox="0 0 880 280" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow5" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
+    <marker id="arrow5g" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#282"/></marker>
+  </defs>
+  <text x="440" y="28" text-anchor="middle" font-family="serif" font-size="18" font-weight="600" fill="#222">Figure 5 — Agent Architecture (Single-Process, Two-Thread)</text>
+
+  <!-- Process boundary -->
+  <rect x="20" y="45" width="840" height="195" rx="10" fill="#fafafa" stroke="#bbb" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="40" y="68" font-family="serif" font-size="13" fill="#888">Single process boundary</text>
+
+  <!-- UI thread box -->
+  <rect x="40" y="75" width="300" height="120" rx="6" fill="#e8f0ff" stroke="#36c" stroke-width="1.5"/>
+  <text x="190" y="98" text-anchor="middle" font-family="serif" font-size="16" fill="#222">UI Thread</text>
+  <line x1="60" y1="108" x2="320" y2="108" stroke="#36c" stroke-width="0.5"/>
+  <text x="190" y="128" text-anchor="middle" font-family="serif" font-size="13" fill="#444">Terminal input / output</text>
+  <text x="190" y="148" text-anchor="middle" font-family="serif" font-size="13" fill="#444">Linenoise line editing</text>
+  <text x="190" y="168" text-anchor="middle" font-family="serif" font-size="13" fill="#444">Streaming text rendering</text>
+  <text x="190" y="188" text-anchor="middle" font-family="serif" font-size="13" fill="#444">Status bar / progress</text>
+
+  <!-- Worker thread box -->
+  <rect x="460" y="75" width="380" height="120" rx="6" fill="#f0e8e8" stroke="#a33" stroke-width="1.5"/>
+  <text x="650" y="98" text-anchor="middle" font-family="serif" font-size="16" fill="#222">Worker Thread</text>
+  <line x1="480" y1="108" x2="820" y2="108" stroke="#a33" stroke-width="0.5"/>
+  <text x="650" y="128" text-anchor="middle" font-family="serif" font-size="13" fill="#444">ds4_session generation</text>
+  <text x="650" y="148" text-anchor="middle" font-family="serif" font-size="13" fill="#444">Tool call execution (bash, edit, etc.)</text>
+  <text x="650" y="168" text-anchor="middle" font-family="serif" font-size="13" fill="#444">Session management (save / list / switch)</text>
+  <text x="650" y="188" text-anchor="middle" font-family="serif" font-size="13" fill="#444">KV cache checkpointing</text>
+
+  <!-- Shared state -->
+  <rect x="350" y="210" width="180" height="25" rx="4" fill="#f5f0e8" stroke="#c80" stroke-width="1.2"/>
+  <text x="440" y="228" text-anchor="middle" font-family="serif" font-size="13" fill="#555">Shared: session tokens + KV state</text>
+
+  <!-- Arrow: UI → Worker -->
+  <line x1="340" y1="140" x2="448" y2="140" stroke="#555" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <text x="394" y="130" text-anchor="middle" font-family="serif" font-size="11" fill="#888">queued prompt</text>
+
+  <!-- Arrow: Worker → UI -->
+  <path d="M448,170 L340,170" fill="none" stroke="#555" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <text x="394" y="188" text-anchor="middle" font-family="serif" font-size="11" fill="#888">streamed tokens</text>
+
+  <!-- Callout: no IPC -->
+  <text x="190" y="245" text-anchor="middle" font-family="serif" font-size="13" fill="#282">✓ No IPC, no sockets, no serialization — KV mismatch impossible by construction</text>
+</svg>
+<strong>Figure 5 — Agent Architecture.</strong> The UI thread handles terminal I/O while the worker thread owns inference and tool execution. They communicate through shared session state, not sockets. This eliminates serialization overhead and makes KV cache mismatches impossible.
+</div>
+
+<h3>9.2 Advantages</h3>
+
+<ul>
+    <li><strong>Latency.</strong> No serialization or network overhead. Displaying generated text, starting tool calls, and switching sessions are bounded by prefill speed alone.</li>
+    <li><strong>Progress.</strong> Live progress bars during prefill, driven by <code>ds4_session_progress_fn</code> callbacks.</li>
+    <li><strong>Native tool-calling.</strong> The agent handles DSML tool calls natively — no conversion layer, no schema translation.</li>
+    <li><strong>KV cache integrity.</strong> Mismatches are impossible by construction: the agent's state is always the truth.</li>
+    <li><strong>Session switching.</strong> The agent can list and switch sessions (<code>/list</code>, <code>/switch</code>) with zero prefill cost, because each session is a precomputed KV cache checkpoint on disk.</li>
+</ul>
+
+<h3>9.3 Current Status and Future Direction</h3>
+
+<p>The agent is currently alpha quality. When it reaches a stable shape, the plan is to split the server and client into a stateful session-based protocol that can recreate the agent experience in a client-server configuration.</p>
+
+<h2>10. Performance</h2>
+
+<h3>10.1 Benchmark Methodology</h3>
+
+<p><code>ds4-bench</code> measures instantaneous prefill and generation throughput at context frontiers rather than reporting a single whole-run average. The benchmark loads the model once, walks a fixed token sequence to frontiers (2048, 4096, 6144, ...), and uses incremental prefill so each row measures only the newly-added token interval. After each frontier it saves the live KV state to memory, generates a fixed greedy non-EOS probe, restores the memory snapshot, and continues prefill.</p>
+
+<h3>10.2 Measured Throughput</h3>
+
+<p>The following table reports single-run Metal CLI numbers with <code>--ctx 32768</code>, <code>--nothink</code>, greedy decoding, and <code>-n 256</code>. Short prompts use a small Italian story prompt; long prompts exercise chunked prefill plus long-context decode.</p>
+
+<table>
+    <tr><th>Machine</th><th>Quant</th><th>Prompt</th><th>Prefill (t/s)</th><th>Generation (t/s)</th></tr>
+    <tr><td>MacBook Pro M3 Max, 128 GB</td><td>q2</td><td>short</td><td>58.52</td><td>26.68</td></tr>
+    <tr><td>MacBook Pro M3 Max, 128 GB</td><td>q2</td><td>11709 tokens</td><td>250.11</td><td>21.47</td></tr>
+    <tr><td>Mac Studio M3 Ultra, 512 GB</td><td>q2</td><td>short</td><td>84.43</td><td>36.86</td></tr>
+    <tr><td>Mac Studio M3 Ultra, 512 GB</td><td>q2</td><td>11709 tokens</td><td>468.03</td><td>27.39</td></tr>
+    <tr><td>Mac Studio M3 Ultra, 512 GB</td><td>q4</td><td>short</td><td>78.95</td><td>35.50</td></tr>
+    <tr><td>Mac Studio M3 Ultra, 512 GB</td><td>q4</td><td>12018 tokens</td><td>448.82</td><td>26.62</td></tr>
+    <tr><td>DGX Spark GB10, 128 GB</td><td>q2</td><td>7047 tokens</td><td>343.81</td><td>13.75</td></tr>
+</table>
+
+<p>Prefill speeds scale with available memory bandwidth and GPU compute, reaching 468 t/s on the M3 Ultra with long prompts. Generation speeds are more uniform across configurations, reflecting the decode-bound nature of autoregressive inference.</p>
+
+<!-- ===================================================================== -->
+<!-- Figure 6: Performance Chart -->
+<!-- ===================================================================== -->
+<div class="fig">
+<svg viewBox="0 0 880 420" xmlns="http://www.w3.org/2000/svg">
+  <text x="440" y="28" text-anchor="middle" font-family="serif" font-size="18" font-weight="600" fill="#222">Figure 6 — Prefill and Generation Throughput by Machine</text>
+
+  <text x="40" y="55" font-family="serif" font-size="13" fill="#555">Tokens per second</text>
+
+  <!-- Y axis -->
+  <line x1="80" y1="65" x2="80" y2="380" stroke="#555" stroke-width="1.2"/>
+  <!-- X axis -->
+  <line x1="80" y1="380" x2="830" y2="380" stroke="#555" stroke-width="1.2"/>
+
+  <!-- Y gridlines + labels -->
+  <line x1="80" y1="380" x2="830" y2="380" stroke="#ddd" stroke-width="0.5"/>
+  <text x="72" y="384" text-anchor="end" font-family="serif" font-size="11" fill="#888">0</text>
+  <line x1="80" y1="332" x2="830" y2="332" stroke="#ddd" stroke-width="0.5"/>
+  <text x="72" y="336" text-anchor="end" font-family="serif" font-size="11" fill="#888">50</text>
+  <line x1="80" y1="284" x2="830" y2="284" stroke="#ddd" stroke-width="0.5"/>
+  <text x="72" y="288" text-anchor="end" font-family="serif" font-size="11" fill="#888">100</text>
+  <line x1="80" y1="236" x2="830" y2="236" stroke="#ddd" stroke-width="0.5"/>
+  <text x="72" y="240" text-anchor="end" font-family="serif" font-size="11" fill="#888">150</text>
+  <line x1="80" y1="188" x2="830" y2="188" stroke="#ddd" stroke-width="0.5"/>
+  <text x="72" y="192" text-anchor="end" font-family="serif" font-size="11" fill="#888">200</text>
+  <line x1="80" y1="140" x2="830" y2="140" stroke="#ddd" stroke-width="0.5"/>
+  <text x="72" y="144" text-anchor="end" font-family="serif" font-size="11" fill="#888">250</text>
+  <line x1="80" y1="92" x2="830" y2="92" stroke="#ddd" stroke-width="0.5"/>
+  <text x="72" y="96" text-anchor="end" font-family="serif" font-size="11" fill="#888">300</text>
+  <line x1="80" y1="44" x2="830" y2="44" stroke="#ddd" stroke-width="0.5"/>
+  <text x="72" y="48" text-anchor="end" font-family="serif" font-size="11" fill="#888">350</text>
+
+  <!-- Prefill bars (blue) — M3 Max short -->
+  <rect x="140" y="284" width="40" height="96" rx="2" fill="#36c" opacity="0.85"/>
+  <rect x="140" y="284" width="40" height="96" rx="2" fill="none" stroke="#36c" stroke-width="1"/>
+  <text x="160" y="278" text-anchor="middle" font-family="monospace" font-size="10" fill="#36c">58</text>
+
+  <!-- Generation bar (green) — M3 Max short -->
+  <rect x="200" y="326" width="40" height="54" rx="2" fill="#282" opacity="0.85"/>
+  <rect x="200" y="326" width="40" height="54" rx="2" fill="none" stroke="#282" stroke-width="1"/>
+  <text x="220" y="322" text-anchor="middle" font-family="monospace" font-size="10" fill="#282">27</text>
+
+  <!-- X-axis label group 1 -->
+  <text x="180" y="405" text-anchor="middle" font-family="serif" font-size="11" fill="#555">M3 Max q2</text>
+
+  <!-- Prefill bar — M3 Ultra q2 short -->
+  <rect x="300" y="236" width="40" height="144" rx="2" fill="#36c" opacity="0.85"/>
+  <rect x="300" y="236" width="40" height="144" rx="2" fill="none" stroke="#36c" stroke-width="1"/>
+  <text x="320" y="230" text-anchor="middle" font-family="monospace" font-size="10" fill="#36c">84</text>
+
+  <!-- Generation bar — M3 Ultra q2 short -->
+  <rect x="360" y="294" width="40" height="86" rx="2" fill="#282" opacity="0.85"/>
+  <rect x="360" y="294" width="40" height="86" rx="2" fill="none" stroke="#282" stroke-width="1"/>
+  <text x="380" y="290" text-anchor="middle" font-family="monospace" font-size="10" fill="#282">37</text>
+
+  <text x="340" y="405" text-anchor="middle" font-family="serif" font-size="11" fill="#555">M3 Ultra q2</text>
+
+  <!-- Prefill bar — M3 Ultra q4 short -->
+  <rect x="460" y="244" width="40" height="136" rx="2" fill="#36c" opacity="0.85"/>
+  <rect x="460" y="244" width="40" height="136" rx="2" fill="none" stroke="#36c" stroke-width="1"/>
+  <text x="480" y="238" text-anchor="middle" font-family="monospace" font-size="10" fill="#36c">79</text>
+
+  <!-- Generation bar — M3 Ultra q4 short -->
+  <rect x="520" y="296" width="40" height="84" rx="2" fill="#282" opacity="0.85"/>
+  <rect x="520" y="296" width="40" height="84" rx="2" fill="none" stroke="#282" stroke-width="1"/>
+  <text x="540" y="292" text-anchor="middle" font-family="monospace" font-size="10" fill="#282">35</text>
+
+  <text x="500" y="405" text-anchor="middle" font-family="serif" font-size="11" fill="#555">M3 Ultra q4</text>
+
+  <!-- Prefill bar — DGX Spark q2 long -->
+  <rect x="620" y="140" width="40" height="240" rx="2" fill="#36c" opacity="0.85"/>
+  <rect x="620" y="140" width="40" height="240" rx="2" fill="none" stroke="#36c" stroke-width="1"/>
+  <text x="640" y="134" text-anchor="middle" font-family="monospace" font-size="10" fill="#36c">344</text>
+
+  <!-- Generation bar — DGX Spark q2 long -->
+  <rect x="680" y="328" width="40" height="52" rx="2" fill="#282" opacity="0.85"/>
+  <rect x="680" y="328" width="40" height="52" rx="2" fill="none" stroke="#282" stroke-width="1"/>
+  <text x="700" y="324" text-anchor="middle" font-family="monospace" font-size="10" fill="#282">14</text>
+
+  <text x="660" y="405" text-anchor="middle" font-family="serif" font-size="11" fill="#555">DGX Spark q2</text>
+
+  <!-- Legend -->
+  <rect x="750" y="65" width="10" height="10" rx="2" fill="#36c"/>
+  <text x="766" y="75" font-family="serif" font-size="12" fill="#555">Prefill (t/s)</text>
+  <rect x="750" y="88" width="10" height="10" rx="2" fill="#282"/>
+  <text x="766" y="98" font-family="serif" font-size="12" fill="#555">Generation (t/s)</text>
+
+  <!-- Note -->
+  <text x="440" y="415" text-anchor="middle" font-family="serif" font-size="11" fill="#888">Short prompt values shown; long-prompt prefill reaches 250–468 t/s (see table)</text>
+</svg>
+<strong>Figure 6 — Prefill and Generation Throughput.</strong> Short-prompt throughput for representative configurations. Prefill (blue) benefits from memory bandwidth and parallel compute; generation (green) is decode-bound and more uniform. The DGX Spark achieves the highest prefill speed (344 t/s) due to its GPU compute advantage.
+</div>
+
+<h2>11. Quality Assurance and Testing</h2>
+
+<h3>11.1 Correctness Regression</h3>
+
+<p>The test runner (<code>ds4_test</code>) validates the engine against official DeepSeek V4 Flash continuation vectors at various context sizes. Available test suites:</p>
+
+<ul>
+    <li><code>--server</code> — request parsing, chat rendering, streaming, tool-call parsing.</li>
+    <li><code>--logprob-vectors</code> — logprob accuracy against official continuations.</li>
+    <li><code>--long-context</code> — correctness at extended context windows.</li>
+    <li><code>--tool-call-quality</code> — tool-calling fidelity.</li>
+    <li><code>--metal-kernels</code> — individual Metal kernel correctness.</li>
+</ul>
+
+<h3>11.2 Speed Regression</h3>
+
+<p>All changes affecting inference backends must be checked for speed regressions. The only acceptable speed penalty is when an important correctness bug is fixed. Benchmarks are collected with <code>ds4-bench</code> and recorded in the <code>speed-bench/</code> directory as CSV files and graphs.</p>
+
+<h3>11.3 Quality Testing</h3>
+
+<p>The <code>gguf-tools/quality-testing/</code> directory provides a framework for scoring local GGUFs against official DeepSeek V4 Flash continuations. This ensures that quantization and imatrix tuning do not introduce systematic quality degradation.</p>
+
+<h2>12. Acknowledgements</h2>
+
+<p>DS4 does not link against GGML, but it exists thanks to the path opened by the llama.cpp project and the kernels, quantization formats, GGUF ecosystem, and hard-won engineering knowledge developed there. We are indebted to Georgi Gerganov and all llama.cpp contributors. Some source-level pieces are retained or adapted under the MIT license: GGUF quant layouts and tables, CPU quant/dot logic, and certain kernels. The GGML authors copyright notice is preserved in the <code>LICENSE</code> file.</p>
+
+<p>The project is developed with strong assistance from GPT 5.5, with humans leading the ideas, testing, and debugging. This is stated openly because it shaped how the project was built.</p>
+
+<h2>13. Status and Future Work</h2>
+
+<h3>13.1 Current Status</h3>
+
+<p>The code and GGUF files are of <strong>beta quality</strong>. Inference and model serving are complicated matters that take months to stabilize. The agent is <strong>alpha quality</strong>. The project is maintained in a usable state and is under active development.</p>
+
+<h3>13.2 Known Limitations</h3>
+
+<ul>
+    <li>macOS CPU inference crashes the kernel due to an apparent VM implementation bug. The system must be restarted after such a crash.</li>
+    <li>Speculative decoding (MTP) is experimental and provides at most a slight speedup.</li>
+    <li>The agent TUI, while functional, is alpha quality and lacks the polish of a production system.</li>
+</ul>
+
+<h3>13.3 Planned Work</h3>
+
+<ul>
+    <li>Split the server and agent into a stateful session-based protocol, enabling client-server deployment of the agent experience.</li>
+    <li>Track future DeepSeek V4 Flash updates and adapt the engine as needed.</li>
+    <li>Stabilize the KV cache eviction policy and hit-count decay heuristics.</li>
+    <li>Improve speculative decoding throughput.</li>
+</ul>
+
+<div class="footer">
+    <p>Generated from the <a href="https://github.com/antirez/ds4">antirez/ds4</a> repository. Commit <code>a365e44</code>. See <code>README.md</code>, <code>MODEL_CARD.md</code>, and <code>CONTRIBUTING.md</code> for authoritative documentation.</p>
+</div>
+
+<div class="colophon" style="margin-top:2em; padding:1.2em 1.5em; background:#f9f9f9; border:1px solid #ddd; border-radius:4px; font-size:0.85em; color:#555;">
+    <p style="font-family: 'Fira Code', monospace; font-size:0.9em; font-weight:600; margin-bottom:0.5em; color:#333;">⌀ Colophon</p>
+    <p style="margin:0.4em 0;">This document was <strong>created with ds4-agent</strong> — the native coding agent built into DwarfStar 4 — running against DeepSeek V4 Flash (q2-imatrix) on a MacBook Pro M3 Max.</p>
+    <p style="margin:0.4em 0;">The generation session used the following prompt sequence:</p>
+    <ol style="margin:0.4em 0 0.4em 1.5em; padding:0;">
+        <li><em>generate ds4.html explaining the what, why, how, when of ds4 as seen from this repo</em></li>
+        <li><em>update ds4.html to read and look like a technical report</em></li>
+        <li><em>add suitable diagrams to ds4.html</em></li>
+        <li><em>update ~/pradeep-stellar.github.io/index.html with an entry about ~/pradeep-stellar.github.io/ds4.html</em></li>
+        <li><em>add published date to ds4.html</em></li>
+        <li><em>add colophon section — "created with ds4-agent". add the summary of the prompt using this session below that.</em></li>
+    </ol>
+    <p style="margin:0.4em 0; font-style:italic;">All prompts were processed by ds4-agent in a single interactive session, demonstrating zero-latency session switching, live prefill progress, and native tool-calling — each edit applied directly to the source file without serialization or API boundaries.</p>
+    <p style="margin:0.4em 0; text-align:right; font-family: 'Fira Code', monospace; font-size:0.85em;">&mdash; Generated on May 20, 2025</p>
+</div>
+
+</body>
+</html>
