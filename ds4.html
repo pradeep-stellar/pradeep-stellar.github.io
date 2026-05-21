@@ -5,167 +5,298 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>DS4 — DwarfStar 4: Technical Report</title>
         <style>
-            /* --- Typography & Layout --- */
+            /*
+             * Hallmark · macrostructure: Long Document · tone: editorial
+             * anchor hue: warm (amber-ink) · theme: Newsprint
+             * pre-emit critique: P4 H4 E4 S5 R5 V5
+             */
+
+            /* --- Token block --- */
+            :root {
+                --color-paper: #f7f5f0;
+                --color-ink: #1e1b15;
+                --color-ink-muted: #5a5346;
+                --color-ink-dim: #8a8478;
+                --color-accent: #9a7b4f;
+                --color-accent-soft: #d9cbb7;
+                --color-code-bg: #ede9e1;
+                --color-code-border: #d6cebe;
+                --color-table-stripe: #efe9df;
+                --color-hr: #d6cebe;
+                --color-hairline: #c8bfad;
+                --color-note-bg: #e8e3d8;
+                --color-note-border: #b8ab95;
+                --color-warn-bg: #f1ead6;
+                --color-warn-border: #c9b07a;
+                --color-abstract-bg: #efe9df;
+                --color-abstract-border: #c8bfad;
+                --color-fig-border: #d6cebe;
+                --color-colophon-bg: #efe9df;
+
+                --font-display: "EB Garamond", "Times New Roman", serif;
+                --font-mono: "Fira Code", "Menlo", monospace;
+                --font-body: "EB Garamond", "Times New Roman", serif;
+
+                --text-base: 17px;
+                --text-body: 1.55;
+                --text-display: 2.4em;
+                --text-h2: 1.65em;
+                --text-h3: 1.35em;
+                --text-h4: 1.15em;
+                --text-small: 0.85em;
+                --text-fine: 0.75em;
+
+                --space-sm: 0.5em;
+                --space-md: 1em;
+                --space-lg: 1.5em;
+                --space-xl: 2em;
+                --space-2xl: 3em;
+                --space-3xl: 5em;
+
+                --rule-thin: 1px solid var(--color-hairline);
+                --rule-medium: 2px solid var(--color-ink);
+                --rule-accent: 2px solid var(--color-accent);
+
+                --radius-sm: 2px;
+                --radius-md: 4px;
+                --radius-lg: 6px;
+
+                --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+                --dur-reveal: 0.6s;
+            }
+
             @import url("https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Fira+Code:wght@400;500&display=swap");
+
+            *, *::before, *::after { box-sizing: border-box; }
+
+            html { overflow-x: clip; }
             body {
-                font-family: "EB Garamond", "Times New Roman", serif;
-                font-size: 17px;
-                line-height: 1.55;
-                color: #1a1a1a;
+                overflow-x: clip;
+                font-family: var(--font-body);
+                font-size: var(--text-base);
+                line-height: var(--text-body);
+                color: var(--color-ink);
                 max-width: 960px;
                 margin: 0 auto;
-                padding: 2.5rem 1.5rem;
-                background: #fefefe;
+                padding: 3rem 2rem;
+                background: var(--color-paper);
+                -webkit-font-smoothing: antialiased;
             }
-            h1,
-            h2,
-            h3,
-            h4 {
-                font-family: "EB Garamond", "Times New Roman", serif;
+
+            @media (max-width: 768px) {
+                body {
+                    padding: 2rem 1.25rem;
+                    font-size: 16px;
+                }
+            }
+
+            h1, h2, h3, h4 {
+                font-family: var(--font-display);
                 font-weight: 600;
                 letter-spacing: -0.01em;
+                line-height: 1.25;
             }
             h1 {
-                font-size: 2.4em;
-                border-bottom: 2px solid #222;
-                padding-bottom: 0.25em;
-                margin-top: 1.8em;
+                font-size: var(--text-display);
+                border-bottom: var(--rule-medium);
+                padding-bottom: 0.35em;
+                margin-top: 1.2em;
                 text-align: center;
             }
             h2 {
-                font-size: 1.65em;
-                margin-top: 2.2em;
-                border-left: 3px solid #222;
-                padding-left: 0.65em;
+                font-size: var(--text-h2);
+                margin-top: var(--space-3xl);
+                border-left: 3px solid var(--color-ink);
+                padding-left: 0.75em;
             }
             h3 {
-                font-size: 1.35em;
-                margin-top: 1.8em;
+                font-size: var(--text-h3);
+                margin-top: var(--space-2xl);
+                font-weight: 500;
             }
             h4 {
-                font-size: 1.15em;
-                margin: 1.2em 0 0.5em;
+                font-size: var(--text-h4);
+                margin: var(--space-lg) 0 var(--space-sm);
             }
             p {
-                margin: 1em 0;
+                margin: var(--space-md) 0;
                 text-align: justify;
+                hyphens: auto;
             }
-            ul,
-            ol {
-                margin: 1em 0;
+            ul, ol {
+                margin: var(--space-md) 0;
                 padding-left: 1.8em;
             }
             li {
-                margin: 0.5em 0;
+                margin: 0.45em 0;
+                line-height: 1.5;
             }
             code {
-                font-family: "Fira Code", "Menlo", monospace;
-                font-size: 0.85em;
-                background: #f2f2f2;
-                padding: 0.1em 0.25em;
-                border-radius: 2px;
+                font-family: var(--font-mono);
+                font-size: 0.82em;
+                background: var(--color-code-bg);
+                padding: 0.08em 0.3em;
+                border-radius: var(--radius-sm);
+                color: var(--color-ink);
             }
             pre {
-                font-family: "Fira Code", "Menlo", monospace;
-                font-size: 0.8em;
-                background: #f2f2f2;
-                padding: 1em 1.2em;
-                border-radius: 4px;
+                font-family: var(--font-mono);
+                font-size: 0.78em;
+                background: var(--color-code-bg);
+                padding: 1.2em 1.4em;
+                border-radius: var(--radius-md);
                 overflow-x: auto;
-                border: 1px solid #ddd;
+                border: var(--rule-thin);
                 line-height: 1.45;
+                color: var(--color-ink);
             }
             blockquote {
-                border-left: 3px solid #ccc;
-                margin: 1.2em 0;
-                padding: 0.5em 1em 0.5em 1.2em;
-                color: #444;
+                border-left: 3px solid var(--color-accent-soft);
+                margin: var(--space-lg) 0;
+                padding: 0.5em 1em 0.5em 1.4em;
+                color: var(--color-ink-muted);
                 font-style: italic;
-                background: #f9f9f9;
+                background: var(--color-abstract-bg);
+                border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
             }
             table {
                 border-collapse: collapse;
                 width: 100%;
-                margin: 1.2em 0;
-                font-size: 0.95em;
+                margin: var(--space-lg) 0;
+                font-size: 0.92em;
             }
-            th,
-            td {
-                border: 1px solid #ccc;
-                padding: 0.45em 0.7em;
+            th, td {
+                border: var(--rule-thin);
+                padding: 0.5em 0.75em;
                 text-align: left;
                 vertical-align: top;
             }
             th {
-                background: #f0f0f0;
+                background: var(--color-table-stripe);
                 font-weight: 600;
+                font-family: var(--font-display);
             }
             tr:nth-child(even) {
-                background: #fafafa;
+                background: var(--color-table-stripe);
             }
+
+            /* --- Utility classes --- */
             .warn {
-                background: #fff9e6;
-                border: 1px solid #f5c542;
-                border-radius: 3px;
-                padding: 0.8em 1em;
-                margin: 1.2em 0;
+                background: var(--color-warn-bg);
+                border: 1px solid var(--color-warn-border);
+                border-radius: var(--radius-md);
+                padding: 0.9em 1.2em;
+                margin: var(--space-lg) 0;
+                font-size: 0.92em;
             }
             .note {
-                background: #e8f0ff;
-                border: 1px solid #36c;
-                border-radius: 3px;
-                padding: 0.8em 1em;
-                margin: 1.2em 0;
+                background: var(--color-note-bg);
+                border: 1px solid var(--color-note-border);
+                border-radius: var(--radius-md);
+                padding: 0.9em 1.2em;
+                margin: var(--space-lg) 0;
+                font-size: 0.92em;
             }
             .abstract {
-                background: #f5f5f5;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                padding: 1.2em 1.5em;
-                margin: 1.5em 0;
+                background: var(--color-abstract-bg);
+                border: var(--rule-thin);
+                border-radius: var(--radius-md);
+                padding: var(--space-lg) 1.5em;
+                margin: var(--space-lg) 0;
                 font-style: italic;
             }
+            .abstract strong {
+                font-family: var(--font-display);
+                font-weight: 600;
+                letter-spacing: 0.02em;
+            }
             .footer {
-                margin-top: 3em;
-                border-top: 1px solid #ccc;
-                padding-top: 1em;
-                font-size: 0.85em;
-                color: #888;
+                margin-top: var(--space-3xl);
+                border-top: var(--rule-thin);
+                padding-top: var(--space-md);
+                font-size: var(--text-small);
+                color: var(--color-ink-muted);
                 text-align: center;
             }
             .fig {
-                margin: 1.5em 0;
+                margin: var(--space-xl) 0;
                 text-align: center;
                 font-size: 0.9em;
-                color: #555;
+                color: var(--color-ink-muted);
             }
             .fig svg {
                 max-width: 100%;
                 height: auto;
-                border: 1px solid #eee;
-                border-radius: 6px;
+                border: var(--rule-thin);
+                border-radius: var(--radius-lg);
+                background: var(--color-paper);
             }
             .fig strong {
                 display: block;
                 margin-top: 0.5em;
                 font-weight: 600;
-                color: #333;
+                font-family: var(--font-display);
+                color: var(--color-ink);
             }
             .section-number {
-                font-family: "Fira Code", monospace;
-                font-size: 0.85em;
-                color: #555;
+                font-family: var(--font-mono);
+                font-size: var(--text-small);
+                color: var(--color-ink-dim);
                 margin-right: 0.5em;
             }
             sup {
-                font-size: 0.75em;
+                font-size: var(--text-fine);
+                color: var(--color-ink-muted);
             }
             .eq {
-                font-family: "Fira Code", monospace;
+                font-family: var(--font-mono);
                 font-size: 0.9em;
-                background: #f2f2f2;
+                background: var(--color-code-bg);
                 padding: 0.1em 0.2em;
-                border-radius: 2px;
+                border-radius: var(--radius-sm);
+            }
+
+            /* --- Colophon refinements --- */
+            .colophon {
+                margin-top: var(--space-2xl);
+                padding: var(--space-lg) 1.5em;
+                background: var(--color-colophon-bg);
+                border: var(--rule-thin);
+                border-radius: var(--radius-md);
+                font-size: var(--text-small);
+                color: var(--color-ink-muted);
+            }
+            .colophon p:first-child {
+                font-family: var(--font-mono);
+                font-size: 0.9em;
+                font-weight: 600;
+                margin-bottom: var(--space-sm);
+                color: var(--color-ink);
+            }
+            .colophon-date {
+                margin-top: var(--space-sm);
+                text-align: right;
+                font-family: var(--font-mono);
+                font-size: 0.85em;
+                color: var(--color-ink-dim);
+            }
+            .colophon-italic {
+                font-style: italic;
+            }
+
+            /* --- Responsive refinements --- */
+            @media (max-width: 768px) {
+                h1 { font-size: 1.8em; }
+                h2 { font-size: 1.35em; }
+                h3 { font-size: 1.15em; }
+                h4 { font-size: 1em; }
+                table { font-size: 0.85em; }
+                th, td { padding: 0.35em 0.5em; }
+            }
+            @media (max-width: 414px) {
+                body { padding: 1.5rem 1rem; }
+                h1 { font-size: 1.5em; }
+                pre { font-size: 0.72em; padding: 0.8em 1em; }
             }
         </style>
     </head>
@@ -180,7 +311,7 @@
             "
         >
             A Single-Model Native Inference Engine for DeepSeek V4 Flash<br />Technical
-            Report &middot; Published May 20, 2025
+            Report &middot; Updated May 21, 2026
         </p>
 
         <div class="abstract">
@@ -196,7 +327,7 @@
             validates against official logits, and integrates deeply with
             agentic workflows. This report describes the architecture, design
             rationale, performance characteristics, and component subsystems of
-            DS4 as reflected in the repository at commit <code>a365e44</code>.
+            DS4 as reflected in the repository at commit <code>8d57664</code>.
         </div>
 
         <!-- ===================================================================== -->
@@ -3670,49 +3801,208 @@
             <li>Improve speculative decoding throughput.</li>
         </ul>
 
+        <h2>14. Recent Developments</h2>
+
+        <h3>14.1 SSE Keepalive for Long Prefill</h3>
+
+        <p>
+            The server now keeps the SSE connection alive during extended prefill
+            phases (<code>f027269</code>). This prevents client timeouts when the
+            model processes long prompts before generation begins — a critical fix
+            for OpenAI-compatible streaming clients that expect periodic
+            keepalive signals. Additionally, prefill errors that occur after
+            keepalive are handled gracefully (<code>8d57664</code>), ensuring
+            robust error recovery in streaming mode.
+        </p>
+
+        <h3>14.2 Mixed GGUF Splicing Tool</h3>
+
+        <p>
+            A new <code>ds4-splice</code> utility (<code>93d9d96</code>) enables
+            combining GGUF files with different quantization mixes. This allows
+            operators to create custom split-quantization models — for example,
+            pairing a q2-imatrix expert layer with a q4-KM shared layer — without
+            rebuilding the full GGUF from scratch. The tool validates tensor
+            layouts across source files to ensure architectural compatibility.
+        </p>
+
+        <h3>14.3 Agent TUI Maturation</h3>
+
+        <p>
+            The native <code>ds4-agent</code> TUI has received substantial
+            refinement across rendering, session management, and interaction
+            design. Key improvements include:
+        </p>
+        <ul>
+            <li>
+                <strong>Glyph-based prefill progress</strong> (<code>9ff77a1</code>) —
+                live progress bars use Unicode glyphs instead of raw text,
+                improving readability at small terminal widths.
+            </li>
+            <li>
+                <strong>Robust terminal colors</strong> (<code>8ba0c45</code>) —
+                color handling uses ANSI escape sequences that survive terminal
+                reflow and dark-mode environments.
+            </li>
+            <li>
+                <strong>Prompt preservation</strong> (<code>799dff4</code>) — the
+                user's prompt remains visible during streamed output, enabling
+                continuous reference while the agent generates.
+            </li>
+            <li>
+                <strong>Status bar refresh</strong> (<code>2606543</code>) — the
+                agent status bar updates in-place without redrawing the entire
+                screen, reducing visual flicker.
+            </li>
+            <li>
+                <strong>Adaptive terminal layout</strong> (<code>1aedee4</code>) —
+                the TUI dynamically adjusts to terminal dimensions, handling
+                resizes and narrow windows.
+            </li>
+            <li>
+                <strong>History replay</strong> (<code>23cf510</code>) — improved
+                linenoise history folding prevents aggressive truncation of long
+                command sequences.
+            </li>
+            <li>
+                <strong>Session management while busy</strong> (<code>1dc8bdb</code>) —
+                agents can save and list sessions during active generation without
+                blocking.
+            </li>
+            <li>
+                <strong>Post-edit context</strong> (<code>8daa088</code>) — after
+                applying file edits, the agent shows the changed context to the
+                model, reducing follow-up correction rounds.
+            </li>
+            <li>
+                <strong>Queued prompt handling</strong> (<code>1e3c11f</code>) —
+                append-only queuing prevents prompt reordering under concurrent
+                input.
+            </li>
+        </ul>
+
+        <h3>14.4 Benchmark Harness (ds4-eval)</h3>
+
+        <p>
+            A comprehensive evaluation framework (<code>de5ec6d</code> through
+            <code>48c4d4d</code>) now ships with DS4. <code>ds4-eval</code>
+            supports:
+        </p>
+        <ul>
+            <li>
+                <strong>Automated benchmark runs</strong> — prompt sets are audited
+                and localized for COMPSEC, reasoning, and general knowledge tasks.
+            </li>
+            <li>
+                <strong>Auto-sizing context</strong> (<code>4441e56</code>) — the
+                harness dynamically adjusts context length to match prompt
+                requirements, avoiding wasted prefill.
+            </li>
+            <li>
+                <strong>TUI reporting</strong> (<code>336fbd6</code>) — results are
+                displayed in a clean terminal interface with pass/fail summaries
+                and per-item breakdowns.
+            </li>
+            <li>
+                <strong>Perplexity scoring</strong> (<code>d630ca4</code>) — the CLI
+                can compute perplexity over arbitrary text, providing a
+                quality-independent correctness metric.
+            </li>
+        </ul>
+
+        <h3>14.5 KV Cache Hit Decay</h3>
+
+        <p>
+            The eviction policy now supports <strong>hit-count decay</strong>
+            (<code>b62292c</code>), enabled by default (<code>d0357ec</code>).
+            Cache entries that have been hit frequently receive a decaying score
+            multiplier, preventing popular entries from permanently crowding out
+            newer context. This is especially beneficial for long-running
+            conversations where earlier turns remain relevant but shouldn't
+            dominate the cache budget.
+        </p>
+
+        <h3>14.6 Server Enhancements</h3>
+
+        <p>
+            Several server-side improvements have been merged:
+        </p>
+        <ul>
+            <li>
+                <strong>Working directory option</strong> (<code>ef0a490</code>) —
+                <code>ds4-server</code> accepts <code>--working-directory</code> to
+                resolve relative session paths.
+            </li>
+            <li>
+                <strong>Opt-in CORS support</strong> (<code>312935e</code>) — the
+                server exposes configurable CORS headers for web-based clients.
+            </li>
+            <li>
+                <strong>Tool schema prepend</strong> (<code>7b68234</code>) — tool
+                definitions are automatically prepended to the rendered system
+                prompt, improving compliance on OpenAI-compatible tool calls.
+            </li>
+            <li>
+                <strong>Cache usage reporting</strong> (<code>38800bf</code>,
+                <code>0ca2e28</code>) — the server reports Anthropic and KV cache
+                usage statistics via OpenAI-compatible API fields.
+            </li>
+            <li>
+                <strong>Default min-p sampling</strong> (<code>613e9b2</code>) — the
+                server now defaults to min-p filtering for generation, reducing
+                degenerate output without configuration.
+            </li>
+        </ul>
+
+        <h3>14.7 CUDA and Metal Fixes</h3>
+
+        <ul>
+            <li>
+                <strong>Flash graph correctness</strong> (<code>5bc1e6d</code>) —
+                fixes to the CUDA Flash graph builder ensure correct attention
+                computation under compressed prefill.
+            </li>
+            <li>
+                <strong>Compressed prefill RoPE</strong> (<code>c9dd949</code>) —
+                RoPE position computation corrected for compressed sparse
+                attention on CUDA.
+            </li>
+            <li>
+                <strong>Managed KV cache for huge contexts</strong> (<code>04b6fda</code>) —
+                CUDA uses managed memory for KV cache allocations exceeding GPU
+                VRAM, enabling 1M-token context on 48 GB cards.
+            </li>
+            <li>
+                <strong>Mismatched API vector skip</strong> (<code>4efd501</code>) —
+                the engine gracefully skips long API vectors that don't match the
+                active model's architecture, preventing load failures.
+            </li>
+        </ul>
+
         <div class="footer">
             <p>
                 Generated from the
                 <a href="https://github.com/antirez/ds4">antirez/ds4</a>
-                repository. Commit <code>a365e44</code>. See
+                repository. Commit <code>8d57664</code>. See
                 <code>README.md</code>, <code>MODEL_CARD.md</code>, and
                 <code>CONTRIBUTING.md</code> for authoritative documentation.
             </p>
         </div>
 
-        <div
-            class="colophon"
-            style="
-                margin-top: 2em;
-                padding: 1.2em 1.5em;
-                background: #f9f9f9;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                font-size: 0.85em;
-                color: #555;
-            "
-        >
-            <p
-                style="
-                    font-family: &quot;Fira Code&quot;, monospace;
-                    font-size: 0.9em;
-                    font-weight: 600;
-                    margin-bottom: 0.5em;
-                    color: #333;
-                "
-            >
+        <div class="colophon">
+            <p>
                 ⌀ Colophon
             </p>
-            <p style="margin: 0.4em 0">
+            <p>
                 This document was <strong>created with ds4-agent</strong> — the
                 native coding agent built into DwarfStar 4 — running against
                 DeepSeek V4 Flash (q2-imatrix) on a MacBook Pro M5 Max, 128GB
                 RAM.
             </p>
-            <p style="margin: 0.4em 0">
+            <p>
                 The generation session used the following prompt sequence:
             </p>
-            <ol style="margin: 0.4em 0 0.4em 1.5em; padding: 0">
+            <ol>
                 <li>
                     <em
                         >generate ds4.html explaining the what, why, how, when
@@ -3741,22 +4031,15 @@
                     >
                 </li>
             </ol>
-            <p style="margin: 0.4em 0; font-style: italic">
+            <p class="colophon-italic">
                 All prompts were processed by ds4-agent in a single interactive
                 session, demonstrating zero-latency session switching, live
                 prefill progress, and native tool-calling — each edit applied
                 directly to the source file without serialization or API
                 boundaries.
             </p>
-            <p
-                style="
-                    margin: 0.4em 0;
-                    text-align: right;
-                    font-family: &quot;Fira Code&quot;, monospace;
-                    font-size: 0.85em;
-                "
-            >
-                &mdash; Generated on May 20, 2025
+            <p class="colophon-date">
+                &mdash; Generated on May 20, 2025 · Updated May 21, 2026
             </p>
         </div>
     </body>
